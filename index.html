@@ -420,18 +420,39 @@ async function apiCall(system,content,maxTok){
   if(!rawText2){console.warn('API empty response',data);return {};}
   const raw=rawText2.replace(/```json|```/g,'').trim();
   const m=raw.match(/\{[\s\S]*\}/);
-  if(!m){console.warn('No JSON in response:',raw.substring(0,300));throw new Error('Нет JSON в ответе: '+raw.substring(0,120));}
-  try{return JSON.parse(m[0]);}catch(e){console.warn('JSON parse error',m[0].substring(0,200));throw new Error('Ошибка парсинга JSON: '+e.message);}
+  if(!m){
+    console.warn('No JSON in response:',raw.substring(0,300));
+    throw new Error('Нет JSON в ответе: '+raw.substring(0,120));
+  }
+  try{
+    return JSON.parse(m[0]);
+  }catch(e){
+    var s=m[0];
+    var ob=0,ab=0,inStr=false,esc=false;
+    for(var ci=0;ci<s.length;ci++){
+      var ch=s[ci];
+      if(esc){esc=false;continue;}
+      if(ch==='\\'){esc=true;continue;}
+      if(ch==='"'){inStr=!inStr;continue;}
+      if(inStr)continue;
+      if(ch==='{')ob++;else if(ch==='}')ob--;else if(ch==='[')ab++;else if(ch===']')ab--;
+    }
+    if(inStr)s+='"';
+    while(ab>0){s+=']';ab--;}
+    while(ob>0){s+='}';ob--;}
+    try{return JSON.parse(s);}
+    catch(e2){return {};}
+  }
 }
 
 // PROMPTS
 var VISUAL1_SYS='Ты геодезист. Изучи графику в документе.\nЗАДАЧА 1 - ТЕРРИТОРИЯ. Ответь ТОЛЬКО JSON:\n{"has_graphic":true,"graphic_type":"план/топоплан/схема/нет","build_density":"нет/редкая/средняя/плотная/промзона/лес/парк","contour":"простой/сложный/трасса","water":false,"vegetation":"открыто/кустарник/лес","area_visible_ga":null,"scale_visible":null,"coord_system_visible":null,"special_zones":[],"confidence":"высокая/средняя/низкая","notes":""}';
 var VISUAL2_SYS='Ты геодезист. Изучи коммуникации на графике.\nЗАДАЧА 2 - КОММУНИКАЦИИ. Ответь ТОЛЬКО JSON:\n{"has_underground_comm":false,"comm_types":[],"has_wells":false,"wells_count_approx":null,"has_overhead":false,"overhead_types":[],"roads_type":"нет","industrial_objects":false,"comm_density":"нет","trassa_needed":false,"localization_needed":false,"confidence":"высокая/средняя/низкая","notes":""}';
 var VISUAL3_SYS='Ты геодезист. Изучи штамп и сделай выводы.\nЗАДАЧА 3 - ШТАМП И ВЫВОДЫ. Ответь ТОЛЬКО JSON:\n{"scale":null,"coord_system":null,"height_system":null,"plan_organization":null,"year_on_plan":null,"boundary_complexity":"простая/средняя/сложная","data_freshness":"актуальные/устаревшие/не определить","contradictions_with_text":[],"confidence":"высокая/средняя/низкая","terr_type_suggestion":"незастр_простой/незастр_сложный/застр_простой/застр_средний/застр_сложный/промзона_простой/промзона_сложный/дендро_парк/дендро_лес/не определить","terr_type_reason":""}';
-var PASS1_SYS='Ты технический оценщик геодезической компании (СРО изыскателей).\nПРОХОД 1: Базовые параметры объекта.\nАДРЕС ОБЯЗАТЕЛЕН: ищи 1)адрес объекта 2)адрес заказчика 3)кадастровый номер 4)название предприятия. Расстояние от МКАД (не от заказчика).\nОтветь ТОЛЬКО JSON:\n{"object":"","object_source":"прямо/по заказчику/ориентировочно","dist_km":0,"terrType":"незастр_простой/незастр_сложный/застр_простой/застр_средний/застр_сложный/промзона_простой/промзона_сложный/дендро_парк/дендро_лес","area_ga":0,"length_km":0,"strip_m":50,"days":0,"dist_note":""}';
-var PASS2_SYS='Ты технический оценщик геодезической компании (СРО изыскателей).\nПРОХОД 2: Технические требования и спецработы.\nТрассировка и колодцы - стандарт 86% объектов.\nОтветь ТОЛЬКО JSON:\n{"has_trassa":false,"has_wells":false,"has_loca":false,"has_bathy":false,"has_static":false,"needs_expertise":false,"coord_system":"","scale":"","formats":[],"norms":[],"special_conditions":[]}';
-var PASS3_SYS='Ты технический оценщик геодезической компании (СРО изыскателей).\nПРОХОД 3: Риски и вердикт.\nБаза 1057 сделок: КП незастр=277-282к, застр=199-290к, промзона=303-455к, дендро=76-388к руб. Удельная ~250 руб/га. Маржа: незастр=86-88%, застр=84-87%, промзона=79-83%, дендро=75-77%. Согласования медиана 70к руб.\nОтветь ТОЛЬКО JSON:\n{"is_ours":true,"verdict":"да/нет/уточнить","verdict_reason":"","sales_summary":"","risks":[],"clarify_customer":[],"clarify_sub":[],"clarify_web":[],"what_to_do_to_win":[],"tasks":[],"unmatched_works":[],"missing":[],"understanding":{"what":"","scope":[],"conditions":[],"not_clear":[],"risks":[],"opportunities":[]}}';
-var VERIFY_SYS='Ты контролёр качества. Проверь извлечённые данные ТЗ.\nОриентиры (1057 сделок): удельная ~250 руб/га, дни незастр=5-6, застр=3-6, промзона=4-8, дендро=4-10. Бригада 2 чел. Трассировка+колодцы вместе (86%).\nОтветь ТОЛЬКО JSON:\n{"confidence":"высокая/средняя/низкая","confidence_reason":"","errors":[],"missed":[],"corrections":{},"ok_fields":[],"summary":""}';
+var PASS1_SYS='Ты технический оценщик геодезической компании (СРО изыскателей).\nПРОХОД 1: Базовые параметры объекта.\nАДРЕС ОБЯЗАТЕЛЕН: ищи 1)адрес объекта 2)адрес заказчика 3)кадастровый номер 4)название предприятия. Расстояние от МКАД (не от заказчика).\nОтветь ТОЛЬКО JSON:\n{"object":"","object_source":"прямо/по заказчику/ориентировочно","dist_km":0,"terrType":"незастр_простой/незастр_сложный/застр_простой/застр_средний/застр_сложный/промзона_простой/промзона_сложный/дендро_парк/дендро_лес","area_ga":0,"length_km":0,"strip_m":50,"days":0,"dist_note":""}\nОТВЕЧАЙ ТОЛЬКО JSON. НИКАКОГО ТЕКСТА ДО ИЛИ ПОСЛЕ.';
+var PASS2_SYS='Ты технический оценщик геодезической компании (СРО изыскателей).\nПРОХОД 2: Технические требования и спецработы.\nТрассировка и колодцы - стандарт 86% объектов.\nОтветь ТОЛЬКО JSON:\n{"has_trassa":false,"has_wells":false,"has_loca":false,"has_bathy":false,"has_static":false,"needs_expertise":false,"coord_system":"","scale":"","formats":[],"norms":[],"special_conditions":[]}\nОТВЕЧАЙ ТОЛЬКО JSON. НИКАКОГО ТЕКСТА ДО ИЛИ ПОСЛЕ.';
+var PASS3_SYS='Ты технический оценщик геодезической компании (СРО изыскателей).\nПРОХОД 3: Риски и вердикт.\nБаза 1057 сделок: КП незастр=277-282к, застр=199-290к, промзона=303-455к, дендро=76-388к руб. Удельная ~250 руб/га. Маржа: незастр=86-88%, застр=84-87%, промзона=79-83%, дендро=75-77%. Согласования медиана 70к руб.\nОтветь ТОЛЬКО JSON:\n{"is_ours":true,"verdict":"да/нет/уточнить","verdict_reason":"","sales_summary":"","risks":[],"clarify_customer":[],"clarify_sub":[],"clarify_web":[],"what_to_do_to_win":[],"tasks":[],"unmatched_works":[],"missing":[],"understanding":{"what":"","scope":[],"conditions":[],"not_clear":[],"risks":[],"opportunities":[]}}\nОТВЕЧАЙ ТОЛЬКО JSON. НИКАКОГО ТЕКСТА ДО ИЛИ ПОСЛЕ.';
+var VERIFY_SYS='Ты контролёр качества. Проверь извлечённые данные ТЗ.\nОриентиры (1057 сделок): удельная ~250 руб/га, дни незастр=5-6, застр=3-6, промзона=4-8, дендро=4-10. Бригада 2 чел. Трассировка+колодцы вместе (86%).\nОтветь ТОЛЬКО JSON:\n{"confidence":"высокая/средняя/низкая","confidence_reason":"","errors":[],"missed":[],"corrections":{},"ok_fields":[],"summary":""}\nОТВЕЧАЙ ТОЛЬКО JSON. НИКАКОГО ТЕКСТА ДО ИЛИ ПОСЛЕ.';
 
 // PARSE
 var _parsing=false;
