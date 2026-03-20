@@ -500,19 +500,13 @@ async function handleFiles(inp){
         if(!r.value||r.value.trim().length<10) throw new Error('Не удалось прочитать файл');
         _files.push({type:'docx',text:r.value,name:f.name,size:f.size});
         var cur=document.getElementById('tzText').value;
-        document.getElementById('tzText').value=(cur?cur+'
-
-':'')+'=== '+f.name+' ===
-'+r.value.substring(0,4000);
+        document.getElementById('tzText').value=(cur?cur+'\n\n':'')+'=== '+f.name+' ===\n'+r.value.substring(0,4000);
       } else if(nm.endsWith('.txt')){
         var txt=await f.text();
         if(txt.trim().length<5) throw new Error('Пустой файл');
         _files.push({type:'docx',text:txt,name:f.name,size:f.size});
         var cur=document.getElementById('tzText').value;
-        document.getElementById('tzText').value=(cur?cur+'
-
-':'')+'=== '+f.name+' ===
-'+txt.substring(0,4000);
+        document.getElementById('tzText').value=(cur?cur+'\n\n':'')+'=== '+f.name+' ===\n'+txt.substring(0,4000);
       } else if(nm.match(/\.(dwg|dxf)$/)){
         dwgFiles.push(f.name);
       } else {
