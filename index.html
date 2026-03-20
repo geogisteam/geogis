@@ -406,7 +406,8 @@ function showLogPanel(){
 }
 
 // API CALL
-async function apiCall(system,content,maxTok){
+async function apiCall(system,content,maxTok,_retry){
+  _retry=_retry||0;
   maxTok=maxTok||1200;
   const resp=await fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxTok,temperature:0,system:system,messages:[{role:'user',content:content}]})});
@@ -422,6 +423,10 @@ async function apiCall(system,content,maxTok){
   const m=raw.match(/\{[\s\S]*\}/);
   if(!m){
     console.warn('No JSON in response:',raw.substring(0,300));
+    if(_retry<1){
+      console.warn('Retrying with strict JSON prompt...');
+      return apiCall('Отвечай ТОЛЬКО чистым JSON объектом. Без текста, без markdown. Начинай сразу с {. '+system, content, maxTok, 1);
+    }
     throw new Error('Нет JSON в ответе: '+raw.substring(0,120));
   }
   try{
@@ -441,7 +446,13 @@ async function apiCall(system,content,maxTok){
     while(ab>0){s+=']';ab--;}
     while(ob>0){s+='}';ob--;}
     try{return JSON.parse(s);}
-    catch(e2){return {};}
+    catch(e2){
+      if(_retry<1){
+        console.warn('JSON repair failed, retrying with JSON instruction...');
+        return apiCall('Отвечай ТОЛЬКО чистым JSON объектом без любого текста, markdown или объяснений. '+system, content, maxTok, 1);
+      }
+      return {};
+    }
   }
 }
 
