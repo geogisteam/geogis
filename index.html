@@ -34,10 +34,10 @@ body{background:var(--bg);color:var(--text);font-family:"IBM Plex Sans",sans-ser
 .rp{flex:1;overflow-y:auto;padding:20px 24px;background:var(--bg)}
 .resizer-y{height:5px;background:transparent;cursor:row-resize;flex-shrink:0;border-top:1px solid var(--border);transition:background .15s}
 .resizer-y:hover,.resizer-y.drag{background:var(--accent)}
-.chat-panel{background:var(--surface);flex-shrink:0;display:flex;flex-direction:column;overflow:hidden}
+.chat-panel{background:var(--surface);flex-shrink:0;display:flex;flex-direction:column}
 .chat-header{padding:8px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--s2);flex-shrink:0}
 .chat-header h3{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);flex:1}
-.chat-msgs{flex:1;overflow-y:auto;padding:10px 20px;display:flex;flex-direction:column;gap:7px}
+.chat-msgs{padding:10px 20px;display:flex;flex-direction:column;gap:7px;min-height:60px}
 .msg-user{align-self:flex-end;background:var(--accent);color:#fff;padding:8px 14px;border-radius:12px 12px 3px 12px;font-size:13px;max-width:72%;line-height:1.5}
 .msg-ai{align-self:flex-start;background:var(--s2);border:1px solid var(--border);padding:8px 14px;border-radius:12px 12px 12px 3px;font-size:13px;max-width:82%;line-height:1.55;white-space:pre-wrap}
 .msg-sys{align-self:center;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--muted);font-style:italic;text-align:center;padding:2px 0}
@@ -214,7 +214,7 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
 <div class="rp">
   <div class="empty" id="emptyState">Загрузите ТЗ → нажмите «Извлечь параметры»</div>
   <div id="resultArea" style="display:none"></div>
-  <div style="margin-top:16px"><div class="chat-panel" id="chatPanel" style="height:200px">
+  <div style="margin-top:16px"><div class="chat-panel" id="chatPanel">
   <div class="chat-header"><h3>💬 Вопросы и корректировки расчёта</h3><span style="font-family:monospace;font-size:10px;color:var(--muted)">↕ тяните верхний край</span></div>
   <div class="chat-msgs" id="chatMsgs"><div class="msg-sys">Задайте вопрос или скорректируйте расчёт.</div></div>
   <div class="chat-irow"><input class="chat-inp" id="chatInp" type="text" placeholder="Скорректировать расчёт, задать вопрос..."><button class="chat-send" onclick="sendChat()">Отправить ↑</button></div>
@@ -263,8 +263,8 @@ const PROXY='https://igdi-proxy.veklsandiego.workers.dev/';
 function toggleAcc(h){h.classList.toggle('open');const b=h.nextElementSibling;if(b?.classList.contains('ab'))b.classList.toggle('open');}
 
 // FILES
-const toB64=f=>new Promise((r,j)=>{const x=new FileReader();x.onload=()=>r(x.result.split(',')[1]);x.onerror=j;x.readAsDataURL(f);});
-const loadJS=src=>new Promise((r,j)=>{const s=document.createElement('script');s.src=src;s.onload=r;s.onerror=j;document.head.appendChild(s);});
+function toB64(f){return new Promise(function(r,j){var x=new FileReader();x.onload=function(){r(x.result.split(',')[1]);};x.onerror=j;x.readAsDataURL(f);});}
+function loadJS(src){return new Promise(function(r,j){var s=document.createElement('script');s.src=src;s.onload=r;s.onerror=j;document.head.appendChild(s);});}
 
 async function handleFiles(inp){
   const files=[...inp.files];if(!files.length)return;
@@ -626,22 +626,27 @@ function buildRatesUI(){
 const fmt=n=>Math.round(n).toLocaleString('ru-RU');
 
 function showApiStatus(type, msg){
-  const el=document.getElementById('apiStatus');
+  var el=document.getElementById('apiStatus');
   if(!el) return;
-  if(type==='ok'){el.style.display='none';return;}
-  const isLimit = msg && (msg.includes('rate limit') || msg.includes('rate_limit') || msg.includes('tokens per minute'));
-  const isAuth = msg && (msg.includes('401') || msg.includes('auth') || msg.includes('API key'));
+  if(type==='ok'){el.style.display='none';if(el._timer)clearInterval(el._timer);return;}
+  var isLimit=msg&&(msg.includes('rate limit')||msg.includes('rate_limit')||msg.includes('tokens per minute'));
+  el.style.display='flex';
   if(isLimit){
-    el.style.cssText='display:block;padding:6px 20px;background:#fdf8e0;color:var(--yel);font-family:monospace;font-size:11px;text-align:center;font-weight:600;border-bottom:1px solid #c0a030';
-    el.innerHTML='⏱ Превышен лимит токенов/мин — подожди 60 сек и попробуй снова';
-  } else if(isAuth){
-    el.style.cssText='display:block;padding:6px 20px;background:var(--wl);color:var(--warn);font-family:monospace;font-size:11px;text-align:center;font-weight:600;border-bottom:1px solid var(--red)';
-    el.innerHTML='🔑 Ошибка авторизации API — проблема с ключом или прокси';
+    el.style.cssText='display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 20px;font-family:monospace;font-size:12px;font-weight:700;background:#fdf8ec;color:#7a5a10;border-bottom:1px solid #e8c870';
+    var secs=60;
+    el.innerHTML='<span class="spinner"></span> Лимит токенов/мин — подожди <b id="apiSecs">'+secs+'</b> сек...';
+    if(el._timer) clearInterval(el._timer);
+    el._timer=setInterval(function(){
+      secs--;
+      var s=document.getElementById('apiSecs');
+      if(s) s.textContent=secs;
+      if(secs<=0){clearInterval(el._timer);el.style.display='none';}
+    },1000);
   } else {
-    el.style.cssText='display:block;padding:6px 20px;background:var(--wl);color:var(--warn);font-family:monospace;font-size:11px;text-align:center;font-weight:600;border-bottom:1px solid var(--red)';
-    el.innerHTML='⚠ Ошибка API: '+(msg||'неизвестная ошибка')+' — попробуй снова или обнови страницу';
+    el.style.cssText='display:flex;align-items:center;justify-content:center;padding:10px 20px;font-family:monospace;font-size:12px;font-weight:700;background:#fdf2f0;color:#8a2a20;border-bottom:1px solid #f0a090';
+    el.textContent='⚠ '+('Ошибка API: ')+(msg||'неизвестная');
+    setTimeout(function(){el.style.display='none';},15000);
   }
-  setTimeout(()=>{if(el) el.style.display='none';}, 15000);
 }
 
 function recalc(){
@@ -798,7 +803,35 @@ function renderResult({lines,notIn,total,kp,kpNds,kpMin,kpMax,profit,margin,days
   let rHtml='';
   if(ai.risks?.length) rHtml='<div class="card"><div class="ch2">Риски</div><div class="cb2">'+ai.risks.map(r=>'<div class="ri2"><div class="rd" style="background:#c0a030"></div><div>'+r+'</div></div>').join('')+'</div></div>';
 
-  ra.innerHTML=vHtml+visualHtml+ubHtml+salesHtml+clHtml+winHtml+taskHtml+unmHtml+costHtml+rHtml;
+  // KPI cards
+  var vat2=Math.round((_snap.kpNds||0)-(_snap.kp||0));
+  var kpiH='';
+  if(_snap.kpNds>0){
+    var crew2=parseInt(document.getElementById('p_crew').value)||2;
+    kpiH='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">'
+      +'<div style="background:#fff;border:1px solid #e8e6e0;border-radius:8px;padding:12px"><div style="font-size:10px;color:#aaa;font-family:monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">КП с НДС</div><div style="font-size:19px;font-weight:600;font-family:monospace">'+fmt(_snap.kpNds)+'₽</div><div style="font-size:10px;color:#bbb;font-family:monospace;margin-top:2px">цена заказчику</div></div>'
+      +'<div style="background:#fff;border:1px solid #e8e6e0;border-radius:8px;padding:12px"><div style="font-size:10px;color:#aaa;font-family:monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">КП без НДС</div><div style="font-size:15px;font-weight:600;font-family:monospace">'+fmt(_snap.kp)+'₽</div><div style="font-size:10px;color:#bbb;font-family:monospace;margin-top:2px">НДС: +'+fmt(vat2)+'₽</div></div>'
+      +'<div style="background:#fff;border:1px solid #e8e6e0;border-radius:8px;padding:12px"><div style="font-size:10px;color:#aaa;font-family:monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Маржа</div><div style="font-size:19px;font-weight:600;font-family:monospace;color:#16a349">'+_snap.margin+'%</div><div style="font-size:10px;color:#bbb;font-family:monospace;margin-top:2px">прибыль '+fmt(_snap.profit)+'₽</div></div>'
+      +'<div style="background:#fff;border:1px solid #e8e6e0;border-radius:8px;padding:12px"><div style="font-size:10px;color:#aaa;font-family:monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Дней</div><div style="font-size:19px;font-weight:600;font-family:monospace">'+_snap.days+'</div><div style="font-size:10px;color:#bbb;font-family:monospace;margin-top:2px">бригада '+crew2+' чел.</div></div>'
+      +'</div>';
+  }
+  // Address block
+  var addrV=document.getElementById('p_object').value||ai.object||'';
+  var addrH='';
+  if(addrV){
+    var enc2=encodeURIComponent(addrV);
+    var dist2=document.getElementById('p_dist').value||'';
+    addrH='<div style="background:#fff;border:1px solid #e8e6e0;border-radius:8px;padding:12px 14px;margin-bottom:14px">'
+      +'<div style="font-size:10px;color:#aaa;font-family:monospace;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Объект</div>'
+      +'<div style="font-size:14px;font-weight:500;margin-bottom:5px">'+addrV+'</div>'
+      +(dist2?'<div style="font-size:11px;color:#888;margin-bottom:7px">'+dist2+' км от МКАД</div>':'')
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      +'<a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://yandex.ru/maps/?text='+enc2+'" target="_blank">Яндекс.Карты</a>'
+      +'<a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://maps.google.com/?q='+enc2+'" target="_blank">Google Maps</a>'
+      +'<a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://2gis.ru/search/'+enc2+'" target="_blank">2ГИС</a>'
+      +'</div></div>';
+  }
+  ra.innerHTML=kpiH+addrH+vHtml+visualHtml+ubHtml+salesHtml+clHtml+winHtml+taskHtml+unmHtml+costHtml+rHtml;
   if(notIn.length) runUnmatchedSearch(notIn);
 }
 
