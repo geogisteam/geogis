@@ -210,7 +210,7 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
 <div class="topbar">
   <div class="brand">
     <div class="brand-logo">ГГ</div>
-    <div><div class="brand-name">ГеоГис</div><div class="brand-sub">Оценка геодезических работ</div></div>
+    <div><div class="brand-name">ГеоГис</div><div class="brand-sub">Оценка геодезических работ · v4.1 · 24.03.2026</div></div>
   </div>
   <div class="spacer"></div>
   <button class="tbtn" onclick="showFewShotPanel()">📚 Примеры</button>
@@ -276,11 +276,16 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
 <div class="chat-panel" id="chatPanel">
   
   <div class="chat-msgs" id="chatMsgs"><div class="msg-sys" style="font-size:15px;font-weight:700;color:var(--text);font-style:normal">Задайте вопрос, скорректируйте расчёт, напишите каких данных не хватает в программе</div></div>
-  <div class="chat-irow"><input class="chat-inp" id="chatInp" type="text" placeholder="Задайте вопрос, скорректируйте расчёт, напишите каких данных не хватает..."><button class="chat-send" onclick="sendChat()">↑ Отправить</button></div>
+  <div class="chat-irow">
+  <label style="cursor:pointer;padding:10px 12px;border:1.5px solid var(--border);border-radius:6px;background:var(--bg);font-size:16px;flex-shrink:0" title="Загрузить изображение в чат">📎<input type="file" id="chatImgInp" accept=".png,.jpg,.jpeg" style="display:none" onchange="attachChatImage(this)"></label>
+  <input class="chat-inp" id="chatInp" type="text" placeholder="Задайте вопрос, скорректируйте расчёт, напишите каких данных не хватает...">
+  <button class="chat-send" onclick="sendChat()">↑ Отправить</button>
+</div>
   <div class="chat-hint">Enter для отправки · Расчёт пересчитывается автоматически</div>
 </div>
 </div>
 <script>
+// ГеоГис v3.2 — 2026-03-24 | pipeline: 2-4 проходов | geo_assumed | TOLL_TABLE | токен-лог
 // STATE
 var _ai={}, _files=[], _chat=[], _snap={};
 var _unmRunning=false, _unmCancelled=false;
@@ -361,12 +366,26 @@ async function handleFiles(inp){
         fst.innerHTML='<span style="color:var(--muted)">⏳ Документ: '+f.name+'...</span>';
         if(!window.mammoth) await loadJS('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js');
         var ab=await f.arrayBuffer();
-        var result=await mammoth.extractRawText({arrayBuffer:ab});
-        if(!result.value||result.value.trim().length<5) throw new Error('Не удалось прочитать (попробуйте пересохранить как .docx)');
+        var result;
+        try {
+          result=await mammoth.extractRawText({arrayBuffer:ab});
+        } catch(mammothErr) {
+          // Старый .doc (Word 97-2003) mammoth не читает — конвертируй в .docx
+          if(f.name.toLowerCase().endsWith('.doc')) {
+            errors.push(f.name+': Старый формат .doc не поддерживается. Открой в Word → Сохранить как → .docx');
+          } else {
+            errors.push(f.name+': '+mammothErr.message);
+          }
+          continue;
+        }
+        if(!result||!result.value||result.value.trim().length<5) {
+          errors.push(f.name+': Не удалось прочитать. Если это .doc — пересохрани как .docx');
+          continue;
+        }
         _files.push({type:'docx',text:result.value,name:f.name,size:f.size});
-        var cur=document.getElementById('tzText').value;
-        var prev=result.value.substring(0,3000)+(result.value.length>3000?'\n\n...[ещё '+(result.value.length-3000)+' симв. — полный текст в анализе]':'');
-        document.getElementById('tzText').value=(cur?cur+'\n\n':'')+('=== '+f.name+' ===\n')+prev;
+        var curD=document.getElementById('tzText').value;
+        var prevD=result.value.substring(0,3000)+(result.value.length>3000?'\n\n...[ещё '+(result.value.length-3000)+' симв. — полный текст в анализе]':'');
+        document.getElementById('tzText').value=(curD?curD+'\n\n':'')+('=== '+f.name+' ===\n')+prevD;
       } else if(f.name.toLowerCase().match(/\.(txt|rtf)$/)){
         fst.innerHTML='<span style="color:var(--muted)">⏳ Текст: '+f.name+'...</span>';
         var txtC=await f.text();
@@ -375,16 +394,6 @@ async function handleFiles(inp){
         var curT=document.getElementById('tzText').value;
         var prevT=txtC.substring(0,3000)+(txtC.length>3000?'\n\n...[ещё '+(txtC.length-3000)+' симв.]':'');
         document.getElementById('tzText').value=(curT?curT+'\n\n':'')+('=== '+f.name+' ===\n')+prevT;
-      } else if(false){
-        fst.innerHTML='<span style="color:var(--muted)">⏳ DOCX: '+f.name+'...</span>';
-        if(!window.mammoth) await loadJS('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js');
-        var ab=await f.arrayBuffer();
-        var result=await mammoth.extractRawText({arrayBuffer:ab});
-        if(!result.value||result.value.trim().length<10) throw new Error('Не удалось прочитать DOCX');
-        _files.push({type:'docx',text:result.value,name:f.name,size:f.size});
-        var cur=document.getElementById('tzText').value;
-        var prev4=result.value.substring(0,3000)+(result.value.length>3000?'\n\n...[ещё '+(result.value.length-3000)+' симв. — полный текст в анализе]':'');
-        document.getElementById('tzText').value=(cur?cur+'\n\n':'')+('=== '+f.name+' ===\n')+prev4;
       } else if(f.name.toLowerCase().endsWith('.dwg')){
         errors.push('dwg:'+f.name);
       } else {
@@ -576,10 +585,54 @@ var VERIFY_SYS=`Ты контролёр ГеоГис.
 Если geo_assumed=true — это нормально. missed=что есть в документе но не извлечено.
 JSON:{"confidence":"высокая/средняя/низкая","confidence_reason":"","errors":[],"missed":[],"corrections":{},"ok_fields":[],"summary":""}`;
 
-var CHECK_SYS=`Ты опытный геодезист-оценщик. Проверь расчёт как эксперт.
-JSON:{"ok":true,"issues":[],"corrections":[],"expert_note":"","confidence":"высокая/средняя/низкая"}`;
+// CHECK_SYS v4.1 — 2026-03-24: ОКН, РЖД, min порог, камеральные
+var CHECK_SYS=`Ты опытный геодезист-оценщик (15+ лет). Проверь расчёт как независимый эксперт.
+ЗАДАЧА: найти что ЗАБЫТО или ЗАНИЖЕНО. Не предлагай удешевление — ищи недооценку.
 
-// PARSE — оптимизированный pipeline
+ПРОВЕРЬ:
+1. МИНИМАЛЬНАЯ ЦЕНА: 1 выезд (любая площадь) — min 80-150 тыс.руб. (МО), 150-250 тыс. (регионы >200км). КП ниже = убыток.
+2. КАМЕРАЛЬНЫЕ: обработка данных + отчёт + чертежи = 30-50% от полевых. Учтены?
+3. ПОЛЕВЫЕ ДНИ: бригада 2 чел = max 1 объект в день. Застройка: 1 га/день. Незастроенная: 2 га/день.
+4. ОСОБЫЕ ОБЪЕКТЫ (если в рисках):
+   - ОКН: согласования КГИОП/Минкультуры = +30-100 тыс. + 2-4 недели. Не в расчёте!
+   - РЖД: разрешения + медосмотр + инструктаж + наряды-допуски = +50-150 тыс. Не в расчёте!
+   - Охранные/водоохранные зоны: согласования с балансодержателями.
+5. ТРАНСПОРТ: трансфер бригады туда-обратно учтён? При >100км — командировочные?
+6. Если КП подозрительно низкий для объекта — укажи явно.
+
+ТОЛЬКО JSON (без текста до/после):
+{"ok":true,"issues":[],"corrections":[],"expert_note":"2-3 конкретных предложения","confidence":"высокая/средняя/низкая","min_price_ok":true,"transport_ok":true,"days_ok":true,"special_approvals_needed":false,"approvals_note":""}`;
+
+async function runExpertCheck(){
+  var btn=document.getElementById('expertCheckBtn');if(btn)btn.disabled=true;
+  addChatMsg('sys','🔍 Экспертная проверка расчёта...');
+  var terrText=(document.getElementById('p_terr').options[document.getElementById('p_terr').selectedIndex]||{}).text||'—';
+  var risks=(_ai&&_ai.risks&&_ai.risks.length)?'\nРиски: '+_ai.risks.join('; '):'';
+  var col=(_ai&&_ai.colleagues_work&&_ai.colleagues_work.length)?'\nПередать коллегам: '+_ai.colleagues_work.join('; '):'';
+  var geo=(_ai&&_ai.geo_assumed)?'\n⚠ Вид работ предположен (топосъёмка 1:500)':'';
+  var doc0=(_ai&&_ai._p0)?'\nДокумент: '+_ai._p0.substring(0,800):'';
+  var ctx='Объект: '+document.getElementById('p_object').value
+    +'\nТип: '+terrText+', Площадь: '+document.getElementById('p_area').value+' га'
+    +', Полевых дней: '+document.getElementById('p_days').value
+    +', Расстояние: '+document.getElementById('p_dist').value+' км'
+    +'\nКП без НДС: '+fmt(_snap.kp)+'₽, с НДС: '+fmt(_snap.kpNds)+'₽'
+    +', Маржа: '+_snap.margin+'%, Затраты: '+fmt(_snap.total)+'₽'
+    +risks+col+geo+doc0;
+  try{
+    var r=await apiCall(CHECK_SYS,ctx,2000);
+    var lines=[];
+    if(r.expert_note) lines.push(r.expert_note);
+    if(r.special_approvals_needed) lines.push('⚠ Согласования (ОКН/РЖД/охранные зоны) не включены в расчёт — добавьте отдельно: '+( r.approvals_note||'уточните состав'));
+    if(!r.min_price_ok) lines.push('⚠ Цена ниже минимального порога для данного типа объекта.');
+    if(!r.days_ok) lines.push('⚠ Количество полевых дней не соответствует объёму работ.');
+    if(!r.transport_ok) lines.push('⚠ Транспортные расходы занижены или не учтены.');
+    if(r.issues&&r.issues.length) lines.push('Замечания:\n'+r.issues.map(function(x){return '• '+x;}).join('\n'));
+    if(r.corrections&&r.corrections.length) lines.push('Рекомендации:\n'+r.corrections.map(function(x){return '→ '+x;}).join('\n'));
+    addChatMsg('ai','🔍 Эксперт ('+(r.confidence||'—')+'):\n'+(lines.join('\n\n')||'Расчёт корректен, явных проблем не обнаружено.'));
+  }catch(e){addChatMsg('ai','Ошибка: '+e.message);}
+  if(btn)btn.disabled=false;
+}
+
 var _parsing=false;
 
 function buildAnalysisContent(prefix,rawText,pdfFiles,docxFiles,imgFiles){
@@ -617,6 +670,7 @@ async function apiCall(system,content,maxTok,_retry){
   }
   if(data.error){showApiStatus('error',data.error.message);throw new Error(data.error.message);}
   showApiStatus('ok');
+  if(data.usage&&window._lastUsage){window._lastUsage.input+=data.usage.input_tokens||0;window._lastUsage.output+=data.usage.output_tokens||0;window._lastUsage.calls++;window._lastUsage.cost_usd+=((data.usage.input_tokens||0)*3+(data.usage.output_tokens||0)*15)/1e7;}
   var rawT=(data.content?.[0]?.text||'');if(!rawT)return{};
   var raw=rawT.replace(/```json|```/g,'').trim();
   var m=raw.match(/\{[\s\S]*\}/);
@@ -638,25 +692,12 @@ async function apiCallText(system,content,maxTok){
   }
   if(data.error){showApiStatus('error',data.error.message);throw new Error(data.error.message);}
   showApiStatus('ok');
+  if(data.usage){window._tok=window._tok||{i:0,o:0,n:0};window._tok.i+=data.usage.input_tokens||0;window._tok.o+=data.usage.output_tokens||0;window._tok.n++;}
   return (data.content?.[0]?.text||'').trim();
 }
 
-async function runExpertCheck(){
-  var btn=document.getElementById('expertCheckBtn');if(btn)btn.disabled=true;
-  addChatMsg('sys','🔍 Экспертная проверка...');
-  var ctx='Объект: '+document.getElementById('p_object').value+', тип: '+(document.getElementById('p_terr').options[document.getElementById('p_terr').selectedIndex]||{}).text+', га: '+document.getElementById('p_area').value+', дни: '+document.getElementById('p_days').value+', расст: '+document.getElementById('p_dist').value+' км\nКП: '+fmt(_snap.kp)+'₽, маржа: '+_snap.margin+'%';
-  try{
-    var r=await apiCall(CHECK_SYS,ctx,1500);
-    var msg=r.expert_note||'';
-    if(r.issues&&r.issues.length) msg+='\n'+r.issues.map(function(x){return '• '+x;}).join('\n');
-    if(r.corrections&&r.corrections.length) msg+='\n'+r.corrections.map(function(x){return '→ '+x;}).join('\n');
-    addChatMsg('ai','🔍 Эксперт ('+(r.confidence||'—')+'):\n'+(msg||'Расчёт корректен.'));
-  }catch(e){addChatMsg('ai','Ошибка: '+e.message);}
-  if(btn)btn.disabled=false;
-}
-
+// PARSE — оптимизированный pipeline
 async function parseTZ(){
-  if(_parsing)return;
   _parsing=true;
   _recalcHistory=[];_kpPrev=0;_chatTs=[];
   var rawText=document.getElementById('tzText').value.trim();
@@ -725,13 +766,43 @@ async function parseTZ(){
     var p=Object.assign({},p12,p3,{_verify:verify,_visual:visualData,_p0:p0text});
     if(verify.corrections) Object.keys(verify.corrections).forEach(function(k){if(k in p)p[k]=verify.corrections[k];});
     _ai=p;_chat=[];_chatTs=[];
+    // Инжектируем контекст в историю чата — чтобы Claude в чате знал всё
+    var ctxInject='Проанализированы файлы и извлечены данные оценки.'
+      +(p.object?'\nОбъект: '+p.object:'')
+      +(p.terrType?'\nТип: '+p.terrType:'')
+      +(p.area_ga?'\nПлощадь: '+p.area_ga+' га':'')
+      +(p.dist_km?'\nРасстояние от МКАД: '+p.dist_km+' км':'')
+      +(p.has_trassa?'\nТрассировка коммуникаций: включена':'')
+      +(p.has_wells?'\nВскрытие колодцев: включено':'')
+      +(p.geo_assumed?'\nВид работ предположен (топосъёмка 1:500)':'')
+      +(p.verdict?'\nВердикт: '+p.verdict.toUpperCase()+' — '+( p.verdict_reason||''):'')
+      +(p.risks&&p.risks.length?'\nРиски: '+p.risks.join('; '):'')
+      +(p._p0?'\n\nАнализ документов:\n'+p._p0.substring(0,1000):'');
+    _chat.push({role:'user',content:ctxInject});
+    _chat.push({role:'assistant',content:'Контекст получен. Я вижу всю извлечённую информацию по объекту и готов отвечать на вопросы.'});
     applyParams(p);
     renderLog(p,verify);
+
+    // Если есть кадастровый номер — показываем ссылку на PKK
+    var kadRx=p._p0&&p._p0.match(/([0-9]+:[0-9]+:[0-9]+:[0-9]+)/);
+    if(!kadRx) kadRx=p.object&&p.object.match&&p.object.match(/([0-9]+:[0-9]+:[0-9]+:[0-9]+)/);
+    var kadNum=kadRx&&kadRx[1];
+    if(kadNum){
+      var kadUrl=showCadastralLink(kadNum);
+      // Инжектируем ссылку в assistaint message (не в чат — чтобы не мешать)
+      window._kadNum=kadNum;
+      window._kadUrl=kadUrl;
+      // Покажем в чате как системное сообщение
+      setTimeout(function(){
+        addChatMsg('sys','📍 Кадастровый номер: '+kadNum+' → проверьте площадь и адрес на публичной кадастровой карте');
+      }, 500);
+    }
 
     var vp=(hasPdf||hasImg)&&visualData&&visualData.t&&visualData.t.has_graphic?'2 визуал.+':'';
     var pCount=needsP0?(needsVerify?'4 прохода':'3 прохода'):(needsVerify?'3 прохода':'2 прохода');
     var cc2=verify.confidence==='высокая'?'var(--ok)':verify.confidence==='средняя'?'var(--yel)':'var(--warn)';
-    st.innerHTML='<span style="color:var(--green)">✓</span> '+(_files.length||1)+' файл · '+vp+pCount+' · <b style="color:'+cc2+'">'+(verify.confidence||'—')+'</b>'+(p.geo_assumed?' · <span style="color:var(--yel)">⚠ вид работ предположен</span>':'')+(verify.missed&&verify.missed.length?' · <span style="color:var(--warn)">⚠'+verify.missed.length+' пропусков</span>':'');
+    var tokenInfo=window._lastUsage&&window._lastUsage.calls>0?' · '+window._lastUsage.calls+' зап., ~$'+window._lastUsage.cost_usd.toFixed(3):'';
+    st.innerHTML='<span style="color:var(--green)">✓</span> '+(_files.length||1)+' файл · '+vp+pCount+' · <b style="color:'+cc2+'">'+(verify.confidence||'—')+'</b>'+tokenInfo+(p.geo_assumed?' · <span style="color:var(--yel)">⚠ вид работ предположен</span>':'')+(verify.missed&&verify.missed.length?' · <span style="color:var(--warn)">⚠'+verify.missed.length+' пропусков</span>':'');
     recalc();
 
     var dn=document.getElementById('dealNumber');
@@ -764,7 +835,11 @@ async function parseTZ(){
         files:_files.map(function(f){return f.name;}).join('; '),
         p0_analysis:(p._p0||'').substring(0,2000),
         extracted_params:JSON.stringify({terrType:p.terrType,area_ga:p.area_ga,dist_km:p.dist_km,days:p.days}),
-        sales_summary:p.sales_summary||''
+        sales_summary:p.sales_summary||'',
+        tokens_in:window._tok?window._tok.i:0,
+        tokens_out:window._tok?window._tok.o:0,
+        api_calls:window._tok?window._tok.n:0,
+        cost_usd:window._tok?Math.round(((window._tok.i/1000)*0.003+(window._tok.o/1000)*0.015)*100)/100:0
       });
     },1200);
 
@@ -785,6 +860,13 @@ function applyParams(p){
   updateMapsLinks();
   if(p.terrType&&TERR_MAP[p.terrType]) sv('p_terr',TERR_MAP[p.terrType]);
   if(p.area_ga) sv('p_area',p.area_ga);
+  // Трассировка и вскрытие колодцев — стандарт для топосъёмки 1:500 (86% объектов)
+  // Включаем по умолчанию если не указано обратное
+  if(p.has_geo&&!p.has_trassa&&p.terrType&&p.terrType!=='дендро_парк'&&p.terrType!=='дендро_лес'){
+    var tEl=document.getElementById('p_trassa');
+    if(tEl&&(!tEl.value||tEl.value==='0')&&p.area_ga) tEl.value=p.area_ga;
+    p.has_trassa=true;
+  }
   if(p.length_km) sv('p_len',p.length_km);
   if(p.strip_m) sv('p_strip',p.strip_m);
   if(p.dist_km) sv('p_dist',p.dist_km);
@@ -814,7 +896,9 @@ function applyParams(p){
 function renderLog(p,verify){
   verify=verify||null;
   var src=_files.length?'<div style="margin-bottom:6px;font-weight:600">Файлы:</div>'+_files.map(f=>'<div style="padding:2px 0">'+(f.type==='pdf'?'📄':'📝')+' '+f.name+'</div>').join(''):'Источник: текст';
-  var srcNote=p.object_source?'<div style="margin-top:6px;padding:5px 8px;background:var(--yl);border-radius:3px;color:var(--yel)">📍 Адрес: '+p.object_source+'</div>':'';
+  var _srcMap={'прямо':'указан в документе','в документе':'указан в документе','по заказчику':'адрес заказчика — уточнить!','ориентировочно':'предположительно'};
+  var _srcLabel=_srcMap[p.object_source]||p.object_source||'';
+  var srcNote=_srcLabel?'<div style="margin-top:6px;padding:5px 8px;background:var(--yl);border-radius:3px;color:var(--yel)">📍 Откуда адрес: <b>'+_srcLabel+'</b></div>':'';
   var checks=[{l:'Объект/адрес',v:p.object},{l:'Тип территории',v:p.terrType},{l:'Площадь',v:p.area_ga},{l:'Трасса',v:p.length_km},{l:'Расстояние от МКАД',v:p.dist_km},{l:'Полевые дни',v:p.days},{l:'Трассировка',v:p.has_trassa},{l:'Локализация',v:p.has_loca},{l:'Вскрытие колодцев',v:p.has_wells},{l:'Батиметрия',v:p.has_bathy},{l:'Экспертиза',v:p.needs_expertise}];
   var found=checks.filter(c=>c.v),miss=checks.filter(c=>!c.v);
   var html='<div style="font-family:monospace;font-size:11px;color:var(--muted);margin-bottom:8px;padding-bottom:7px;border-bottom:1px solid var(--border)">'+src+'</div>'+srcNote+'<div class="log-grid" style="margin-top:7px">';
@@ -1107,7 +1191,7 @@ function renderResult({lines,notIn,total,kp,kpNds,kpMin,kpMax,profit,margin,days
     +'<div style="background:#fff;border:1px solid #e8e6e0;border-radius:8px;padding:12px"><div style="font-size:10px;color:#aaa;font-family:monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Дней</div><div style="font-size:19px;font-weight:600;font-family:monospace">'+_snap.days+'</div><div style="font-size:10px;color:#bbb;margin-top:2px">бригада '+crew2+' чел.</div></div>'
     +'</div>':'';
   var addrV=document.getElementById('p_object').value||ai.object||'';
-  var addrH=addrV?'<div style="background:#fff;border:1px solid #e8e6e0;border-radius:8px;padding:12px 14px;margin-bottom:14px"><div style="font-size:10px;color:#aaa;font-family:monospace;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Объект</div><div style="font-size:14px;font-weight:500;margin-bottom:5px">'+addrV+'</div>'+(document.getElementById('p_dist').value?'<div style="font-size:11px;color:#888;margin-bottom:7px">'+document.getElementById('p_dist').value+' км от МКАД</div>':'')+'<div style="display:flex;gap:6px;flex-wrap:wrap"><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://yandex.ru/maps/?text='+encodeURIComponent(addrV)+'" target="_blank">Яндекс.Карты</a><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://maps.google.com/?q='+encodeURIComponent(addrV)+'" target="_blank">Google Maps</a><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://2gis.ru/search/'+encodeURIComponent(addrV)+'" target="_blank">2ГИС</a></div></div>':'';
+  var addrH=addrV?'<div style="background:#fff;border:1px solid #e8e6e0;border-radius:8px;padding:12px 14px;margin-bottom:14px"><div style="font-size:10px;color:#aaa;font-family:monospace;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Объект</div><div style="font-size:14px;font-weight:500;margin-bottom:5px">'+addrV+'</div>'+(document.getElementById('p_dist').value?'<div style="font-size:11px;color:#888;margin-bottom:7px">'+document.getElementById('p_dist').value+' км от МКАД</div>':'')+'<div style="display:flex;gap:6px;flex-wrap:wrap"><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://yandex.ru/maps/?text='+encodeURIComponent(addrV)+'" target="_blank">Яндекс.Карты</a><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://maps.google.com/?q='+encodeURIComponent(addrV)+'" target="_blank">Google Maps</a><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://2gis.ru/search/'+encodeURIComponent(addrV)+'" target="_blank">2ГИС</a>'+(window._kadNum?'<a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="'+window._kadUrl+'" target="_blank">📍 КПК '+window._kadNum+'</a>':'')+'</div></div>':'';
   var expertHtml=_snap.kp>0?'<div style="margin:10px 0"><button id="expertCheckBtn" onclick="runExpertCheck()" style="padding:8px 16px;border:1.5px solid var(--accent);border-radius:4px;background:transparent;font-family:monospace;font-size:12px;color:var(--accent);cursor:pointer">🔍 Экспертная проверка расчёта</button></div>':'';
   ra.innerHTML=kpiH+addrH+vHtml+visualHtml+ubHtml+salesHtml+clHtml+winHtml+taskHtml+unmHtml+costHtml+expertHtml+rHtml;
   if(notIn.length) runUnmatchedSearch(notIn);
@@ -1148,28 +1232,145 @@ function addChatMsg(role,text){
   });
   return d;
 }
-var SYS_CHAT=`Ты ассистент оценщика ГеоГис (геодезический калькулятор).
-ВАЖНО: p_trassa — площадь трассировки в ГА (маленькое число). Никогда не ставь туда рубли или тысячи.
-Если нужно изменить параметры — верни JSON:
-{"p_days":null,"p_dist":null,"p_area":null,"p_margin":null,"p_coef":null,"p_accom":null,"comment":"ответ"}
-p_days=полевых дней, p_dist=км от МКАД, p_area=га, p_margin=% маржи.
-НЕ включай p_trassa в JSON. Если только вопрос — ответь текстом.`;
+function buildChatSystem(){
+  var ai=_ai||{};
+  var snap=_snap||{};
+  // Файлы
+  var filesStr=_files.length?'\nЗагруженные файлы: '+_files.map(function(f){return f.name+'('+f.type+')';}).join(', '):'';
+  // Извлечённые параметры
+  var params='';
+  if(ai.object) params+='\nОбъект: '+ai.object+' ('+( ai.object_source||'—')+')';
+  if(ai.terrType) params+='\nТип территории: '+ai.terrType;
+  if(ai.area_ga) params+='\nПлощадь: '+ai.area_ga+' га';
+  if(ai.length_km) params+='\nДлина трассы: '+ai.length_km+' км';
+  if(ai.dist_km) params+='\nРасстояние от МКАД: '+ai.dist_km+' км';
+  if(ai.days) params+='\nПолевых дней: '+ai.days+' ('+( ai.contract_days?'срок договора: '+ai.contract_days+' р.дн.':'срок не указан')+')';
+  if(ai.scale) params+='\nМасштаб: '+ai.scale;
+  if(ai.coord_system) params+='\nСКК: '+ai.coord_system;
+  if(ai.geo_assumed) params+='\n⚠ Вид работ явно не указан — предположена топосъёмка 1:500';
+  // Спецработы
+  var spec=[];
+  if(ai.has_trassa) spec.push('трассировка коммуникаций');
+  if(ai.has_wells) spec.push('вскрытие колодцев');
+  if(ai.has_loca) spec.push('локализация');
+  if(ai.has_razb) spec.push('разбивочные работы');
+  if(ai.has_exec) spec.push('исполнительная съёмка');
+  if(spec.length) params+='\nСпецработы: '+spec.join(', ');
+  // Коллеги
+  if(ai.colleagues_work&&ai.colleagues_work.length) params+='\nВне расчёта (коллеги): '+ai.colleagues_work.join('; ');
+  // Риски
+  if(ai.risks&&ai.risks.length) params+='\nРиски: '+ai.risks.join('; ');
+  // Вердикт
+  if(ai.verdict) params+='\nВердикт: '+ai.verdict.toUpperCase()+' — '+( ai.verdict_reason||'');
+  // Текущий расчёт
+  var calc='';
+  if(snap.kp) calc='\n\nТЕКУЩИЙ РАСЧЁТ:'
+    +'\nКП без НДС: '+fmt(snap.kp)+'₽ | с НДС: '+fmt(snap.kpNds)+'₽'
+    +'\nМаржа: '+snap.margin+'% | Затраты: '+fmt(snap.total)+'₽'
+    +'\nПолевых дней: '+snap.days;
+  // Анализ документа
+  var p0=ai._p0?'\n\nЧТО В ДОКУМЕНТАХ (автоматический анализ):\n'+ai._p0.substring(0,2000):'';
+  // Визуальный анализ
+  var vis='';
+  if(ai._visual&&ai._visual.t&&ai._visual.t.has_graphic){
+    var vt=ai._visual.t;
+    vis='\n\nВИЗУАЛЬНЫЙ АНАЛИЗ СХЕМ/ПЛАНОВ:';
+    if(vt.graphic_type) vis+='\nТип графики: '+vt.graphic_type;
+    if(vt.has_survey_contour) vis+='\nКонтур съёмки обнаружен ('+( vt.contour_color||'—')+' линия)';
+    if(vt.area_visible_ga) vis+='\nПлощадь по схеме: ~'+vt.area_visible_ga+' га';
+    if(vt.landmarks&&vt.landmarks.length) vis+='\nОриентиры на схеме: '+vt.landmarks.join(', ');
+    if(vt.assessor_note) vis+='\nПримечание: '+vt.assessor_note;
+    var vm=ai._visual.m;
+    if(vm&&vm.location_hint) vis+='\nМестоположение по схеме: '+vm.location_hint;
+  }
+  // Отдельно сохраняем текст DOCX файлов для ответов на вопросы о содержимом
+  var docxCtx='';
+  var docxFiles=_files.filter(function(f){return f.type==='docx';});
+  if(docxFiles.length){
+    docxCtx='\n\nТЕКСТ ИЗ ЗАГРУЖЕННЫХ ДОКУМЕНТОВ:';
+    docxFiles.forEach(function(f){
+      docxCtx+='\n--- '+f.name+' ---\n'+f.text.substring(0,1500);
+    });
+  }
+  return 'Ты ассистент оценщика ГеоГис. ВАЖНО: у тебя ЕСТЬ полный контекст загруженных файлов и результатов анализа.'
+    +'\nТЫ ПОМНИШЬ что было в документах. Отвечай конкретно по данному объекту.'
+    +'\n\nКОНТЕКСТ ОЦЕНКИ:'+filesStr+params+calc+vis+p0+docxCtx
+    +'\n\nЕсли нужно изменить параметры — верни JSON:'
+    +'\n{"p_days":null,"p_dist":null,"p_area":null,"p_margin":null,"p_coef":null,"p_accom":null,"comment":"ответ"}'
+    +'\nНЕ включай p_trassa в JSON. Если вопрос — ответь текстом.';
+}
+// Кадастровый номер — ссылка на PKK (API заблокирован CORS из браузера)
+function showCadastralLink(kadNum){
+  return 'https://pkk.rosreestr.ru/#/search/'+encodeURIComponent(kadNum.trim());
+}
+
+var _chatImage=null; // base64 image pending send
+
+function attachChatImage(inp){
+  var f=inp.files&&inp.files[0];
+  if(!f)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var b64=e.target.result.split(',')[1];
+    var mt=f.name.toLowerCase().endsWith('.png')?'image/png':'image/jpeg';
+    _chatImage={data:b64,mediaType:mt,name:f.name};
+    addChatMsg('sys','📎 Изображение готово к отправке: '+f.name+' — напишите вопрос и нажмите Отправить');
+  };
+  reader.readAsDataURL(f);
+  inp.value='';
+}
+
+async function sendChat(){
+  try{
+    var enc=encodeURIComponent(kadNum.trim());
+    var url='https://pkk.rosreestr.ru/api/features/1?text='+enc+'&limit=1&tolerance=4';
+    var r=await fetch(url,{method:'GET',headers:{'Accept':'application/json'}});
+    if(!r.ok) return null;
+    var d=await r.json();
+    var feat=d&&d.features&&d.features[0];
+    if(!feat||!feat.attrs) return null;
+    var a=feat.attrs;
+    return {
+      address:a.address||a.cn||'',
+      area_m2:a.area_value||0,
+      area_ga:a.area_value?(Math.round(a.area_value/100)/100):0,
+      status:a.status_text||'',
+      category:a.category_type||''
+    };
+  }catch(e){return null;}
+}
 async function sendChat(){
   var inp=document.getElementById('chatInp');
-  var msg=inp.value.trim();if(!msg)return;
+  var msg=inp.value.trim();
+  var hasImg=!!_chatImage;
+  if(!msg&&!hasImg)return;
   inp.value='';
-  addChatMsg('user',msg);
+  if(msg) addChatMsg('user',msg);
   var thinking=addChatMsg('sys','...');
   var ts=new Date().toISOString();
   var cur={object:document.getElementById('p_object').value,terr:(document.getElementById('p_terr').options[document.getElementById('p_terr').selectedIndex]||{}).text||'',area:document.getElementById('p_area').value,days:document.getElementById('p_days').value,dist:document.getElementById('p_dist').value,kp:_snap.kp?fmt(_snap.kp)+'₽':''};
-  _chat.push({role:'user',content:'Текущий расчёт: '+JSON.stringify(cur)+'\nСообщение: "'+msg+'"'});
-  _chatTs.push({role:'user',ts:ts,msg:msg});
+  // Формируем сообщение с возможным изображением
+  var msgContent;
+  if(hasImg){
+    msgContent=[
+      {type:'image',source:{type:'base64',media_type:_chatImage.mediaType,data:_chatImage.data}},
+      {type:'text',text:'Текущий расчёт: '+JSON.stringify(cur)+'\nСообщение: "'+(msg||'Проанализируй это изображение в контексте расчёта')+'"\nФайл: '+_chatImage.name}
+    ];
+    _chatImage=null;
+  } else {
+    msgContent='Текущий расчёт: '+JSON.stringify(cur)+'\nСообщение: "'+msg+'"';
+  }
+  _chat.push({role:'user',content:msgContent});
+  _chatTs.push({role:'user',ts:ts,msg:msg||'[изображение]'});
   try{
-    var resp=await fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,temperature:0,system:SYS_CHAT,messages:_chat})});
+    var resp=await fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,temperature:0,system:buildChatSystem(),messages:_chat})});
     var data=await resp.json();
     var raw=(data.content?.[0]?.text||'').trim();
+    // Логируем токены для контроля затрат
+    if(data.usage) window._lastUsage=(window._lastUsage||{input:0,output:0,calls:0,cost_usd:0});
+    if(data.usage){window._lastUsage.input+=data.usage.input_tokens||0;window._lastUsage.output+=data.usage.output_tokens||0;window._lastUsage.calls++;window._lastUsage.cost_usd+=((data.usage.input_tokens||0)*3+(data.usage.output_tokens||0)*15)/1e7;}
     _chat.push({role:'assistant',content:raw});
-    _chatTs.push({role:'assistant',ts:new Date().toISOString(),msg:raw.substring(0,500)});
+    _chatTs.push({role:'assistant',ts:new Date().toISOString(),msg:raw.substring(0,500),tokens:data.usage||null});
     thinking.remove();
     var parsed=null;
     try{var cl=raw.replace(/```json|```/g,'').trim();if(cl.startsWith('{'))parsed=JSON.parse(cl);}catch(e){}
@@ -1221,8 +1422,17 @@ function submitFeedback(){
     p0_analysis:(ai._p0||'').substring(0,2000),
     kp:s.kp?Math.round(s.kp):'',kp_nds:s.kpNds?Math.round(s.kpNds):'',
     margin:s.margin||'',days:s.days||'',
-    chat_log:JSON.stringify(_chatTs.length>0?_chatTs:_chat.map(function(m){return {role:m.role,content:m.content,ts:'—'};})),
-    chat_turns:_chat.length,
+    // Полная переписка в читаемом виде (для анализа в Sheets)
+    chat_readable:_chat.filter(function(m){return m.role!=='user'||!m.content.toString().startsWith('Проанализированы файлы');}).map(function(m,i){
+      var role=m.role==='user'?'👤 ОЦЕНЩИК':'🤖 МОДЕЛЬ';
+      var txt=typeof m.content==='string'?m.content:JSON.stringify(m.content);
+      return role+': '+txt;
+    }).join('\n---\n'),
+    chat_turns:_chat.filter(function(m){return m.role!=='user'||!m.content.toString().startsWith('Проанализированы файлы');}).length,
+    // Корректировки: что оценщик менял, было→стало
+    corrections_readable:_recalcHistory.map(function(r){
+      return r.ts.substring(11,16)+' | '+r.param+': '+r.kp_bylo+'₽ → '+r.kp_stalo+'₽'+(r.val?' ('+r.param+'='+r.val+')':'');
+    }).join('\n'),
     corrections_made:JSON.stringify(_recalcHistory),
     recalc_count:_recalcHistory.length,
     kp_initial:_recalcHistory.length?_recalcHistory[0].kp_bylo:'',
