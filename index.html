@@ -295,11 +295,18 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
 var _ai={}, _files=[], _chat=[], _snap={};
 
 // ═══ SUPABASE ════════════════════════════════════════════════════
+// Telegram alert — заполни своими данными:
+const TG_BOT_TOKEN = "8795539852:AAFBWZWRgFremvuhPEd3MNpodhUj0nMPVx0";
+const TG_CHAT_ID   = "493762497";
+// ════════════════════════════════════════════════════════════════
+// ═══ SUPABASE ════════════════════════════════════════════════════
 const SUPABASE_URL = "https://seqooejmesqpyuurqagh.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlcW9vZWptZXNxcHl1dXJxYWdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzODQxMDgsImV4cCI6MjA4OTk2MDEwOH0.vqxusruyQGE3pPk0gOuJLkXJmu7RIawrG13A3Nrb7VM";
 // ════════════════════════════════════════════════════════════════
 var _unmRunning=false, _unmCancelled=false;
 var _recalcHistory=[], _kpPrev=0, _chatTs=[];
+var _sessionId=null; // UUID текущей сессии оценки (для upsert в Supabase)
+var _autoSaveTimer=null; // таймер автосохранения
 function trackParamChange(id,label){
   var el=document.getElementById(id);if(!el)return;
   el.addEventListener('change',function(){
@@ -355,15 +362,28 @@ async function sendToSupabase(d) {
         "Content-Type": "application/json",
         "apikey": SUPABASE_KEY,
         "Authorization": "Bearer " + SUPABASE_KEY,
-        "Prefer": "return=minimal"
+        "Prefer": "resolution=merge-duplicates,return=minimal"
       },
       body: JSON.stringify(d)
     });
     if (!resp.ok) {
       var err = await resp.text();
       console.warn("Supabase error:", resp.status, err);
+      // Уведомляем администратора в Telegram
+      if(TG_BOT_TOKEN && TG_CHAT_ID){
+        var obj=document.getElementById('p_object')?document.getElementById('p_object').value:'—';
+        var msg='⚠ ГеоГис: ошибка сохранения в Supabase'
+          +'\nОценщик: '+getEvaluatorId()
+          +'\nОбъект: '+obj
+          +'\nОшибка: HTTP '+resp.status
+          +'\nДетали: '+err.substring(0,200);
+        fetch('https://api.telegram.org/bot'+TG_BOT_TOKEN+'/sendMessage',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({chat_id:TG_CHAT_ID,text:msg})
+        }).catch(function(){});
+      }
     } else {
-      console.log("✅ Supabase: сессия сохранена");
+      console.log("✅ Supabase: сессия сохранена, id:", d.session_id);
     }
   } catch(e) {
     console.warn("Supabase save failed:", e.message);
@@ -744,6 +764,13 @@ async function apiCallText(system,content,maxTok){
 async function parseTZ(){
   _parsing=true;
   _recalcHistory=[];_kpPrev=0;_chatTs=[];
+  // Новая сессия оценки — новый UUID
+  _sessionId='xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0;return(c=='x'?r:(r&0x3|0x8)).toString(16);});
+  // Запускаем автосохранение каждые 2 минуты
+  if(_autoSaveTimer) clearInterval(_autoSaveTimer);
+  _autoSaveTimer=setInterval(function(){
+    if(window._analysisDirty) saveFullLog(true); // true = тихое сохранение
+  }, 120000);
   var rawText=document.getElementById('tzText').value.trim();
   if(!_files.length&&!rawText){alert('Вставьте текст или загрузите файлы');_parsing=false;return;}
   var btn=document.getElementById('parseBtn'),st=document.getElementById('pst');
@@ -1452,6 +1479,8 @@ async function sendChat(){
     _chat.push({role:'assistant',content:raw});
     _chatTs.push({role:'assistant',ts:new Date().toISOString(),msg:raw.substring(0,500),tokens:data.usage||null});
     thinking.remove();
+    // Авто-сохранение после каждого ответа модели (тихое)
+    if(window._analysisDirty) setTimeout(function(){saveFullLog(true);},1500);
     var parsed=null;
     try{
       // Ищем JSON в любом месте ответа (даже если модель написала текст до него)
@@ -1554,8 +1583,9 @@ function submitFeedback(){
 function copyTxt(enc,btn){navigator.clipboard.writeText(decodeURIComponent(enc));btn.textContent='✓';setTimeout(()=>{btn.textContent='⎘ Копировать';},2000);}
 
 // ПОЛНОЕ ЛОГИРОВАНИЕ — вызывается вручную после работы оценщика
-function saveFullLog(){
+function saveFullLog(silent){
   if(!window._analysisDirty&&!_ai.verdict) return;
+  var isSilent=!!silent;
   var ai=_ai,s=_snap;
   var dn=document.getElementById('dealNumber');
   var kad=document.getElementById('kadNumber');
@@ -1613,7 +1643,7 @@ function saveFullLog(){
     cost_usd:window._lastUsage?Math.round(window._lastUsage.cost_usd*1000)/1000:''
   });
   // ── Supabase: параллельное сохранение для обучения модели ──
-  sendToSupabase({
+  sendToSupabase(Object.assign({
     object_address: document.getElementById('p_object').value || ai.object || null,
     cadastral_number: (document.getElementById('kadNumber') || {}).value || window._kadNum || null,
     object_type: ai.has_trassa ? "трассировка" : (ai.has_geo ? "топосъёмка" : null),
@@ -1692,7 +1722,7 @@ function saveFullLog(){
       cost_usd:      window._lastUsage ? Math.round(window._lastUsage.cost_usd * 1000) / 1000 : null,
       deal:          (document.getElementById('dealNumber') || {}).value || null
     }
-  });
+  }, {session_id: _sessionId})); // upsert по session_id
   // ── конец блока Supabase ──
 
   window._analysisDirty=false;
