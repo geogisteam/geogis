@@ -230,6 +230,7 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
     <label class="file-zone">📎 PDF, DOCX/DOC, TXT, RTF, PNG/JPG — можно несколько<input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.rtf,.odt,.png,.jpg,.jpeg" multiple onchange="handleFiles(this)"></label>
     <div class="fst" id="fst"></div>
     <button class="parse-btn" id="parseBtn" onclick="parseTZ()">⚡ ИЗВЛЕЧЬ ПАРАМЕТРЫ</button>
+    <button onclick="recalc()" style="margin-top:4px;width:100%;padding:7px;background:transparent;color:var(--accent);border:1.5px solid var(--accent);border-radius:4px;font-family:monospace;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer" id="recalcBtn">↻ ПЕРЕСЧИТАТЬ</button>
     <div class="pst" id="pst"></div>
   </div>
   <div class="lp-scroll">
@@ -1045,7 +1046,7 @@ buildRatesUI();
   var total=lines.reduce((s,l)=>s+l.v,0);
   if(!total&&!_ai.verdict) return;
   var kp=Math.round(total*(1+margin/100));
-  var vat=Math.round(kp*0.2);
+  var vat=Math.round(kp*0.22); // НДС 22% с 01.01.2026 (ФЗ №425-ФЗ)
   var kpNds=kp+vat;
   var kpMin=Math.round(kp*0.85),kpMax=Math.round(kp*1.2);
   var profit=kp-total;
@@ -1286,12 +1287,20 @@ function buildChatSystem(){
       docxCtx+='\n--- '+f.name+' ---\n'+f.text.substring(0,1500);
     });
   }
-  return 'Ты ассистент оценщика ГеоГис. ВАЖНО: у тебя ЕСТЬ полный контекст загруженных файлов и результатов анализа.'
+  return 'Ты ассистент оценщика ГеоГис. ВАЖНО: у тебя ЕСТЬ полный контекст загруженных файлов и результатов анализа.\nФИКСИРОВАНО В СИСТЕМЕ: НДС = 22% с 01.01.2026 (ФЗ №425-ФЗ от 28.11.2025).. Не меняй и не обсуждай ставку НДС — она задана системой.'
     +'\nТЫ ПОМНИШЬ что было в документах. Отвечай конкретно по данному объекту.'
     +'\n\nКОНТЕКСТ ОЦЕНКИ:'+filesStr+params+calc+vis+p0+docxCtx
     +'\n\nЕсли нужно изменить параметры — верни JSON:'
     +'\n{"p_days":null,"p_dist":null,"p_area":null,"p_margin":null,"p_coef":null,"p_accom":null,"comment":"ответ"}'
-    +'\nНЕ включай p_trassa в JSON. Если вопрос — ответь текстом.';
+    +'\nПРАВИЛА РАБОТЫ С ПАРАМЕТРАМИ:'
+    +'\n1. Когда нужно изменить расчёт — СРАЗУ верни JSON без лишних вопросов. Система применит автоматически.'
+    +'\n2. JSON должен быть в КОНЦЕ ответа, после текста объяснения.'
+    +'\n3. Нулевые (null) параметры система пропускает — ставь null для параметров которые не меняешь.'
+    +'\n4. p_coef — это коэффициент сложности (1.0-2.3), НЕ множитель площади.'
+    +'\n5. Если изменения не применились — скажи пользователю изменить параметр вручную в левой панели.'
+    +'\n6. НДС = 22% зафиксировано системой. Не обсуждай ставку НДС.'
+    +'\n7. НЕ показывай JSON пользователю — он видит только твой текст и результат пересчёта.'
+    +'\nНЕ включай p_trassa в JSON.';
 }
 // Кадастровый номер — ссылка + поиск через Claude web_search
 function showCadastralLink(kadNum){
@@ -1386,7 +1395,7 @@ async function sendChat(){
   _chat.push({role:'user',content:msgContent});
   _chatTs.push({role:'user',ts:ts,msg:msg||'[изображение]'});
   try{
-    var resp=await fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,temperature:0,system:buildChatSystem(),messages:_chat})});
+    var resp=await fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:6000,temperature:0,system:buildChatSystem(),messages:_chat})});
     var data=await resp.json();
     var raw=(data.content?.[0]?.text||'').trim();
     // Логируем токены для контроля затрат
@@ -1396,7 +1405,17 @@ async function sendChat(){
     _chatTs.push({role:'assistant',ts:new Date().toISOString(),msg:raw.substring(0,500),tokens:data.usage||null});
     thinking.remove();
     var parsed=null;
-    try{var cl=raw.replace(/```json|```/g,'').trim();if(cl.startsWith('{'))parsed=JSON.parse(cl);}catch(e){}
+    try{
+      // Ищем JSON в любом месте ответа (даже если модель написала текст до него)
+      var jsonMatch=raw.match(/\{[\s\S]*?\}/);
+      if(jsonMatch){
+        var candidate=JSON.parse(jsonMatch[0]);
+        // Проверяем что это параметры расчёта (не случайный JSON)
+        var paramKeys=['p_days','p_dist','p_area','p_margin','p_coef','p_accom'];
+        var hasParam=paramKeys.some(function(k){return k in candidate;});
+        if(hasParam) parsed=candidate;
+      }
+    }catch(e){}
     if(parsed){
       var safeParams=['p_days','p_dist','p_area','p_margin','p_coef','p_accom'];
       var kpBefore=_snap.kp||0;
@@ -1407,10 +1426,21 @@ async function sendChat(){
         el.type==='checkbox'?el.checked=parsed[k]:el.value=parsed[k];
         if(oldVal!==String(parsed[k])) _recalcHistory.push({ts:new Date().toISOString(),param:k,val:parsed[k],kp_bylo:kpBefore,kp_stalo:0,source:'chat'});
       });
-      addChatMsg('ai',parsed.comment||'Параметры обновлены');
+      // Собираем что изменилось
+      var changed=[];
+      var paramLabels={p_days:'полевые дни',p_dist:'расстояние',p_area:'площадь га',p_margin:'маржа %',p_coef:'коэффициент',p_accom:'проживание'};
+      safeParams.forEach(function(k){if(parsed[k]!==null&&parsed[k]!==undefined) changed.push(paramLabels[k]+': '+parsed[k]);});
+      var commentText=parsed.comment?parsed.comment.replace(/```json[\s\S]*?```/g,'').trim():'';
+      var changeNote=changed.length?'\n✓ Применено: '+changed.join(', '):'';
+      addChatMsg('ai',(commentText||'Параметры обновлены')+changeNote);
       recalc();
       setTimeout(function(){if(_recalcHistory.length>0&&_recalcHistory[_recalcHistory.length-1].kp_stalo===0)_recalcHistory[_recalcHistory.length-1].kp_stalo=_snap.kp||0;},400);
-    } else {addChatMsg('ai',raw);}
+    } else {
+      // Скрываем технический JSON из отображения
+      var display=raw.replace(/```json[\s\S]*?```/g,'').replace(/\{[\s\S]*?"comment"[\s\S]*?\}/g,'').trim();
+      // Если после очистки ничего не осталось — показываем что параметры обновлены
+      addChatMsg('ai',display||'Готово.');
+    }
   }catch(e){thinking.remove();addChatMsg('ai','Ошибка: '+e.message);}
 }
 
@@ -1445,12 +1475,18 @@ function submitFeedback(){
     p0_analysis:(ai._p0||'').substring(0,2000),
     kp:s.kp?Math.round(s.kp):'',kp_nds:s.kpNds?Math.round(s.kpNds):'',
     margin:s.margin||'',days:s.days||'',
-    // Полная переписка в читаемом виде (для анализа в Sheets)
-    chat_readable:_chat.filter(function(m){return m.role!=='user'||!m.content.toString().startsWith('Проанализированы файлы');}).map(function(m,i){
-      var role=m.role==='user'?'👤 ОЦЕНЩИК':'🤖 МОДЕЛЬ';
-      var txt=typeof m.content==='string'?m.content:JSON.stringify(m.content);
-      return role+': '+txt;
-    }).join('\n---\n'),
+    // ПОЛНАЯ переписка для обучения модели
+    chat_readable:(function(){
+      var msgs=_chat.filter(function(m){return !(m.role==='user'&&typeof m.content==='string'&&m.content.startsWith('Проанализированы файлы'));});
+      return msgs.map(function(m,i){
+        var role=m.role==='user'?'👤 ОЦЕНЩИК':'🤖 МОДЕЛЬ';
+        var txt=typeof m.content==='string'?m.content
+          :Array.isArray(m.content)?m.content.map(function(b){return b.text||'[изображение]';}).join(' ')
+          :JSON.stringify(m.content);
+        txt=txt.replace(/```json[\s\S]*?```/g,'[параметры применены]');
+        return (i+1)+'. '+role+':\n'+txt;
+      }).join('\n\n---\n\n');
+    })(),
     chat_turns:_chat.filter(function(m){return m.role!=='user'||!m.content.toString().startsWith('Проанализированы файлы');}).length,
     // Корректировки: что оценщик менял, было→стало
     corrections_readable:_recalcHistory.map(function(r){
@@ -1505,11 +1541,16 @@ function saveFullLog(){
     extracted_params:JSON.stringify({terrType:ai.terrType,area_ga:ai.area_ga,dist_km:ai.dist_km,days:ai.days,scale:ai.scale}),
     sales_summary:ai.sales_summary||'',
     // Переписка в читаемом виде
-    chat_readable:realChat.map(function(m){
+    // ПОЛНЫЙ текст переписки (без ограничений) — ключевое поле для обучения
+    chat_readable:realChat.map(function(m,i){
       var role=m.role==='user'?'👤 ОЦЕНЩИК':'🤖 МОДЕЛЬ';
-      var txt=typeof m.content==='string'?m.content:JSON.stringify(m.content);
-      return role+': '+txt;
-    }).join('\n---\n'),
+      var txt=typeof m.content==='string'?m.content
+        :Array.isArray(m.content)?m.content.map(function(b){return b.text||'[изображение]';}).join(' ')
+        :JSON.stringify(m.content);
+      // Убираем JSON-параметры из отображения (технический мусор)
+      txt=txt.replace(/```json[\s\S]*?```/g,'[параметры применены]').replace(/^\{[\s\S]*\}$/m,'[параметры применены]');
+      return (i+1)+'. '+role+':\n'+txt;
+    }).join('\n\n---\n\n'),
     chat_turns:realChat.length,
     // Корректировки
     corrections_readable:_recalcHistory.map(function(r){
