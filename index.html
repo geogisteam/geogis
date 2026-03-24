@@ -215,6 +215,7 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
   <div class="spacer"></div>
   <button class="tbtn" onclick="showFewShotPanel()">📚 Примеры</button>
   <button class="tbtn" id="saveLogBtn" onclick="saveFullLog()" style="display:none;border-color:var(--yel);color:var(--yel)" title="Сохранить оценку в лог">💾 Сохранить оценку</button>
+  <span id="evaluatorBadge" onclick="switchEvaluator()" title="Сменить оценщика" style="padding:6px 14px;border:1px solid var(--border);border-radius:3px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);cursor:pointer;transition:all .15s;user-select:none">👤 ...</span>
   <button class="tbtn" onclick="showLogPanel()">📋 Лог</button>
   <button class="tbtn" onclick="saveArchive()">⬇ Сохранить</button>
 </div>
@@ -292,6 +293,11 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
 // ГеоГис v3.2 — 2026-03-24 | pipeline: 2-4 проходов | geo_assumed | TOLL_TABLE | токен-лог
 // STATE
 var _ai={}, _files=[], _chat=[], _snap={};
+
+// ═══ SUPABASE ════════════════════════════════════════════════════
+const SUPABASE_URL = "https://seqooejmesqpyuurqagh.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlcW9vZWptZXNxcHl1dXJxYWdoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzODQxMDgsImV4cCI6MjA4OTk2MDEwOH0.vqxusruyQGE3pPk0gOuJLkXJmu7RIawrG13A3Nrb7VM";
+// ════════════════════════════════════════════════════════════════
 var _unmRunning=false, _unmCancelled=false;
 var _recalcHistory=[], _kpPrev=0, _chatTs=[];
 function trackParamChange(id,label){
@@ -339,6 +345,30 @@ var TERR_MAP={'незастр_простой':'630','незастр_сложны
 var TERR_MARGIN={'630':86,'840':88,'1250':84,'1620':84,'1740':87,'1670':83,'2500':79,'1950':77,'2500d':75};
 var SHEETS_URL='https://script.google.com/macros/s/AKfycbyEpCe7_h7McM_BPFE92K2cIcx1MBPOpujaf06ZrCnprlNIUsvw5f7R8-kwg8dmA-XA/exec';
 function sendToSheets(d){if(!SHEETS_URL)return;fetch(SHEETS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}).catch(function(){});}
+
+async function sendToSupabase(d) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return;
+  try {
+    var resp = await fetch(SUPABASE_URL + "/rest/v1/sessions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_KEY,
+        "Authorization": "Bearer " + SUPABASE_KEY,
+        "Prefer": "return=minimal"
+      },
+      body: JSON.stringify(d)
+    });
+    if (!resp.ok) {
+      var err = await resp.text();
+      console.warn("Supabase error:", resp.status, err);
+    } else {
+      console.log("✅ Supabase: сессия сохранена");
+    }
+  } catch(e) {
+    console.warn("Supabase save failed:", e.message);
+  }
+}
 var PROXY='https://igdi-proxy.veklsandiego.workers.dev/';
 
 // Ресайзеры убраны — страница прокручивается как одна
@@ -1582,6 +1612,89 @@ function saveFullLog(){
     output_tokens:window._lastUsage?window._lastUsage.output:'',
     cost_usd:window._lastUsage?Math.round(window._lastUsage.cost_usd*1000)/1000:''
   });
+  // ── Supabase: параллельное сохранение для обучения модели ──
+  sendToSupabase({
+    object_address: document.getElementById('p_object').value || ai.object || null,
+    cadastral_number: (document.getElementById('kadNumber') || {}).value || window._kadNum || null,
+    object_type: ai.has_trassa ? "трассировка" : (ai.has_geo ? "топосъёмка" : null),
+    area_ha: parseFloat(document.getElementById('p_area').value) || null,
+    dist_from_msk_km: parseFloat(document.getElementById('p_dist').value) || null,
+
+    files_uploaded: _files.map(function(f) {
+      return { name: f.name, type: f.type, size_kb: Math.round((f.size||0)/1024) };
+    }),
+
+    ai_extracted: {
+      terrType:        ai.terrType        || null,
+      area_ga:         ai.area_ga         || null,
+      dist_km:         ai.dist_km         || null,
+      days:            ai.days            || null,
+      scale:           ai.scale           || null,
+      geo_assumed:     ai.geo_assumed     || false,
+      has_geo:         ai.has_geo         || false,
+      has_trassa:      ai.has_trassa      || false,
+      has_wells:       ai.has_wells       || false,
+      special_conditions: ai.special_conditions || []
+    },
+    ai_extraction_gaps: (ai._verify && ai._verify.missed) ? ai._verify.missed : [],
+
+    ai_verdict_initial: ai.verdict || null,
+    ai_verdict_final:   ai.verdict || null,
+
+    corrections: _recalcHistory.map(function(r, i) {
+      return {
+        seq:     i + 1,
+        param:   r.param,
+        val_new: r.val,
+        kp_from: r.kp_bylo,
+        kp_to:   r.kp_stalo,
+        source:  r.source || "manual",
+        ts:      r.ts
+      };
+    }),
+
+    chat_full: (function() {
+      var realChat = _chat.filter(function(m) {
+        return !(m.role === 'user' && typeof m.content === 'string' && m.content.startsWith('Проанализированы файлы'));
+      });
+      return realChat.map(function(m, i) {
+        var role = m.role === 'user' ? '👤 ОЦЕНЩИК' : '🤖 МОДЕЛЬ';
+        var txt = typeof m.content === 'string' ? m.content
+          : Array.isArray(m.content) ? m.content.map(function(b){ return b.text || '[изображение]'; }).join(' ')
+          : JSON.stringify(m.content);
+        return (i+1) + '. ' + role + ':\n' + txt;
+      }).join('\n\n---\n\n');
+    })(),
+    chat_turns_count: _chat.filter(function(m) {
+      return !(m.role === 'user' && typeof m.content === 'string' && m.content.startsWith('Проанализированы файлы'));
+    }).length,
+
+    kp_initial: (_recalcHistory.length && _recalcHistory[0].kp_bylo)
+      ? _recalcHistory[0].kp_bylo
+      : (s.kp ? Math.round(s.kp) : null),
+    kp_final:   s.kp ? Math.round(s.kp) : null,
+    delta_kp_pct: (s.kp && _recalcHistory.length && _recalcHistory[0].kp_bylo)
+      ? Math.round(((s.kp - _recalcHistory[0].kp_bylo) / _recalcHistory[0].kp_bylo) * 100)
+      : null,
+    delta_kp_abs: (s.kp && _recalcHistory.length && _recalcHistory[0].kp_bylo)
+      ? Math.round(s.kp - _recalcHistory[0].kp_bylo)
+      : null,
+
+    prompt_version: (typeof MODEL_VERSION !== 'undefined') ? MODEL_VERSION : "не указана",
+    evaluator_id:   getEvaluatorId(),
+
+    rating:         window._fbRating || null,
+    rating_comment: (document.getElementById('fbText') ? document.getElementById('fbText').value.trim() : '') || null,
+
+    raw_session: {
+      input_tokens:  window._lastUsage ? window._lastUsage.input   : null,
+      output_tokens: window._lastUsage ? window._lastUsage.output  : null,
+      cost_usd:      window._lastUsage ? Math.round(window._lastUsage.cost_usd * 1000) / 1000 : null,
+      deal:          (document.getElementById('dealNumber') || {}).value || null
+    }
+  });
+  // ── конец блока Supabase ──
+
   window._analysisDirty=false;
   var saveBtn=document.getElementById('saveLogBtn');
   if(saveBtn){saveBtn.style.background='var(--ok)';saveBtn.textContent='✓ Сохранено';setTimeout(function(){saveBtn.style.background='';saveBtn.style.color='';saveBtn.textContent='💾 Сохранить оценку';},3000);}
@@ -1600,6 +1713,49 @@ document.getElementById('tzText').addEventListener('keydown',e=>{if(e.ctrlKey&&e
 document.getElementById('chatInp').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
 buildRatesUI();
 initParamWatchers();
+</script>
+<div id="evaluatorOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:2px solid var(--text);border-radius:6px;padding:32px 40px;min-width:320px;text-align:center">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:2px;margin-bottom:24px;color:var(--text)">Кто работает?</div>
+    <div id="evaluatorBtns" style="display:flex;flex-direction:column;gap:8px"></div>
+  </div>
+</div>
+<script>
+var EVALUATORS=["Наталья","Анастасия","Кристина","Алексей","Ирина","Елена","Не указано","Тест"];
+function getEvaluatorId(){return localStorage.getItem("gg_evaluator")||"Не указано";}
+function renderEvaluatorOverlay(){
+  var btns=document.getElementById('evaluatorBtns');
+  btns.innerHTML='';
+  EVALUATORS.forEach(function(name){
+    var b=document.createElement('button');
+    b.textContent=name;
+    b.style.cssText='padding:10px 20px;border:1px solid var(--border);border-radius:3px;background:transparent;font-family:"IBM Plex Mono",monospace;font-size:13px;color:var(--text);cursor:pointer;transition:all .15s;text-align:left';
+    b.onmouseover=function(){this.style.background='var(--al)';this.style.borderColor='var(--accent)';this.style.color='var(--accent)';};
+    b.onmouseout=function(){this.style.background='transparent';this.style.borderColor='var(--border)';this.style.color='var(--text)';};
+    b.onclick=function(){
+      localStorage.setItem("gg_evaluator",name);
+      document.getElementById('evaluatorOverlay').style.display='none';
+      var badge=document.getElementById('evaluatorBadge');
+      if(badge) badge.textContent='👤 '+name;
+    };
+    btns.appendChild(b);
+  });
+}
+function switchEvaluator(){
+  renderEvaluatorOverlay();
+  document.getElementById('evaluatorOverlay').style.display='flex';
+}
+// Init on load
+(function(){
+  renderEvaluatorOverlay();
+  var saved=localStorage.getItem("gg_evaluator");
+  var badge=document.getElementById('evaluatorBadge');
+  if(saved){
+    if(badge) badge.textContent='👤 '+saved;
+  } else {
+    document.getElementById('evaluatorOverlay').style.display='flex';
+  }
+})();
 </script>
 </body>
 </html>
