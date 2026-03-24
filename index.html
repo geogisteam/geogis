@@ -214,6 +214,7 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
   </div>
   <div class="spacer"></div>
   <button class="tbtn" onclick="showFewShotPanel()">📚 Примеры</button>
+  <button class="tbtn" id="saveLogBtn" onclick="saveFullLog()" style="display:none;border-color:var(--yel);color:var(--yel)" title="Сохранить оценку в лог">💾 Сохранить оценку</button>
   <button class="tbtn" onclick="showLogPanel()">📋 Лог</button>
   <button class="tbtn" onclick="saveArchive()">⬇ Сохранить</button>
 </div>
@@ -222,7 +223,9 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
 <div class="main">
 <div class="lp" id="lp">
   <div class="input-area">
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><div style="font-family:JetBrains Mono,monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#aaa;white-space:nowrap">№ сделки</div><input id="dealNumber" style="flex:1;padding:6px 9px;border:1px solid #e0ddd8;border-radius:6px;background:#fafaf8;font-family:JetBrains Mono,monospace;font-size:12px;color:#111;outline:none" type="text" placeholder="из Битрикс24"></div><div class="lbl">ТЗ / Запрос КП</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><div style="font-family:JetBrains Mono,monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#aaa;white-space:nowrap">№ сделки</div><input id="dealNumber" style="flex:1;padding:6px 9px;border:1px solid #e0ddd8;border-radius:6px;background:#fafaf8;font-family:JetBrains Mono,monospace;font-size:12px;color:#111;outline:none" type="text" placeholder="из Битрикс24"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><div style="font-family:JetBrains Mono,monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#aaa;white-space:nowrap">Кадастр №</div><input id="kadNumber" style="flex:1;padding:6px 9px;border:1px solid #e0ddd8;border-radius:6px;background:#fafaf8;font-family:JetBrains Mono,monospace;font-size:12px;color:#111;outline:none" type="text" placeholder="не известно" oninput="onKadInput(this.value)"></div>
+    <div class="lbl">ТЗ / Запрос КП</div>
     <textarea class="tz" id="tzText" placeholder="Вставьте текст ТЗ или загрузите файлы..."></textarea>
     <label class="file-zone">📎 PDF, DOCX/DOC, TXT, RTF, PNG/JPG — можно несколько<input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.rtf,.odt,.png,.jpg,.jpeg" multiple onchange="handleFiles(this)"></label>
     <div class="fst" id="fst"></div>
@@ -783,19 +786,35 @@ async function parseTZ(){
     applyParams(p);
     renderLog(p,verify);
 
-    // Если есть кадастровый номер — показываем ссылку на PKK
-    var kadRx=p._p0&&p._p0.match(/([0-9]+:[0-9]+:[0-9]+:[0-9]+)/);
-    if(!kadRx) kadRx=p.object&&p.object.match&&p.object.match(/([0-9]+:[0-9]+:[0-9]+:[0-9]+)/);
+    // Кадастровый номер: ищем в p0 тексте + поле ввода
+    var kadSrc=(p._p0||'')+(p.object||'');
+    var kadRx=kadSrc.match(/([0-9]{1,2}:[0-9]+:[0-9]+:[0-9]+)/);
     var kadNum=kadRx&&kadRx[1];
+    var kadFld=document.getElementById('kadNumber');
+    if(kadFld&&kadFld.value&&kadFld.value!=='не известно'){
+      var km=kadFld.value.match(/([0-9]{1,2}:[0-9]+:[0-9]+:[0-9]+)/);
+      if(km) kadNum=km[1];
+    }
     if(kadNum){
-      var kadUrl=showCadastralLink(kadNum);
-      // Инжектируем ссылку в assistaint message (не в чат — чтобы не мешать)
       window._kadNum=kadNum;
-      window._kadUrl=kadUrl;
-      // Покажем в чате как системное сообщение
-      setTimeout(function(){
-        addChatMsg('sys','📍 Кадастровый номер: '+kadNum+' → проверьте площадь и адрес на публичной кадастровой карте');
-      }, 500);
+      window._kadUrl=showCadastralLink(kadNum);
+      if(kadFld&&(!kadFld.value||kadFld.value==='не известно')) kadFld.value=kadNum;
+      addChatMsg('sys','📍 Кадастр '+kadNum+' — запрашиваю данные...');
+      lookupCadastralViaClaude(kadNum).then(function(res){
+        if(!res||res.address==='не найдено'){
+          addChatMsg('sys','📍 Кадастр '+kadNum+' — данные не найдены. Проверьте на ПКК: pkk.rosreestr.ru');
+          return;
+        }
+        var info='📍 Кадастр '+kadNum+':';
+        if(res.address) info+=' '+res.address;
+        if(res.area_ga&&res.area_ga>0) info+=' | '+res.area_ga+' га';
+        if(res.category) info+=' | '+res.category;
+        addChatMsg('sys',info);
+        var objFld=document.getElementById('p_object');
+        if(objFld&&(!objFld.value||objFld.value==='—')&&res.address){objFld.value=res.address;updateMapsLinks();}
+        var areaFld=document.getElementById('p_area');
+        if(areaFld&&(!areaFld.value||areaFld.value==='0')&&res.area_ga>0){areaFld.value=res.area_ga;recalc();}
+      });
     }
 
     var vp=(hasPdf||hasImg)&&visualData&&visualData.t&&visualData.t.has_graphic?'2 визуал.+':'';
@@ -810,38 +829,13 @@ async function parseTZ(){
     var workNote=p.geo_assumed?'\n⚠ Вид работ явно не указан → расчёт для топосъёмки 1:500. Уточните у заказчика.':'';
     addChatMsg('sys','✓ Анализ готов'+dealNote+'. Уверенность: '+(verify.confidence||'—')+'.'+workNote+'\nЧто скорректировать? Напишите списком:\n— что неточно / что пересчитать / вопросы');
 
-    setTimeout(function(){
-      logAnalysis(p,_snap);
-      var dn2=document.getElementById('dealNumber');
-      sendToSheets({
-        direction:'geo',type:'analysis',
-        ts:new Date().toISOString(),date:new Date().toLocaleString('ru-RU'),
-        deal:dn2?dn2.value:'',
-        object:document.getElementById('p_object').value||p.object||'',
-        terr:(document.getElementById('p_terr').options[document.getElementById('p_terr').selectedIndex]||{}).text||'',
-        ga:document.getElementById('p_area').value||'',
-        dist_km:document.getElementById('p_dist').value||'',
-        polev_days:document.getElementById('p_days').value||'',
-        verdict:p.verdict||'',verdict_reason:p.verdict_reason||'',
-        confidence:verify.confidence||'',
-        kp_no_nds:_snap.kp?Math.round(_snap.kp):'',
-        kp_nds:_snap.kpNds?Math.round(_snap.kpNds):'',
-        margin:_snap.margin||'',
-        geo_assumed:p.geo_assumed||false,
-        has_geo:p.has_geo||false,has_trassa:p.has_trassa||false,
-        has_geo_geo:p.has_geo_geo||false,has_eco:p.has_eco||false,has_hydro:p.has_hydro||false,
-        colleagues:(p.colleagues_work||[]).join('; '),
-        missed:verify.missed&&verify.missed.length?verify.missed.join('; '):'',
-        files:_files.map(function(f){return f.name;}).join('; '),
-        p0_analysis:(p._p0||'').substring(0,2000),
-        extracted_params:JSON.stringify({terrType:p.terrType,area_ga:p.area_ga,dist_km:p.dist_km,days:p.days}),
-        sales_summary:p.sales_summary||'',
-        tokens_in:window._tok?window._tok.i:0,
-        tokens_out:window._tok?window._tok.o:0,
-        api_calls:window._tok?window._tok.n:0,
-        cost_usd:window._tok?Math.round(((window._tok.i/1000)*0.003+(window._tok.o/1000)*0.015)*100)/100:0
-      });
-    },1200);
+    // Сохраняем начальные данные анализа локально (лог улетит позже — после работы оценщика)
+    window._analysisTs=new Date().toISOString();
+    window._analysisDirty=true; // флаг: есть несохранённая оценка
+    logAnalysis(p,_snap);
+    // Показываем кнопку сохранения в топбаре
+    var saveBtn=document.getElementById('saveLogBtn');
+    if(saveBtn){saveBtn.style.display='inline-flex';saveBtn.style.background='var(--yel)';saveBtn.style.color='#fff';saveBtn.title='Оценка не сохранена — нажмите после завершения работы с оценщиком';}
 
   }catch(e){
     st.innerHTML='<span style="color:var(--warn)">Ошибка: '+e.message+'</span>';
@@ -1299,9 +1293,38 @@ function buildChatSystem(){
     +'\n{"p_days":null,"p_dist":null,"p_area":null,"p_margin":null,"p_coef":null,"p_accom":null,"comment":"ответ"}'
     +'\nНЕ включай p_trassa в JSON. Если вопрос — ответь текстом.';
 }
-// Кадастровый номер — ссылка на PKK (API заблокирован CORS из браузера)
+// Кадастровый номер — ссылка + поиск через Claude web_search
 function showCadastralLink(kadNum){
   return 'https://pkk.rosreestr.ru/#/search/'+encodeURIComponent(kadNum.trim());
+}
+function onKadInput(val){
+  if(!val||val==='не известно') return;
+  var rx=/([0-9]+:[0-9]+:[0-9]+:[0-9]+)/;
+  var m=val.match(rx);
+  if(m) window._kadNum=m[1];
+}
+// Запрашиваем данные кадастрового участка через Claude web_search
+async function lookupCadastralViaClaude(kadNum){
+  try{
+    var prompt='Найди в открытых источниках данные земельного участка с кадастровым номером '+kadNum+'. Выдай ТОЛЬКО JSON без пояснений: {"address":"","area_ga":0,"category":"","status":""}. Если не нашёл — {"address":"не найдено","area_ga":0,"category":"","status":""}';
+    var resp=await fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:300,
+        temperature:0,
+        tools:[{type:'web_search_20250305',name:'web_search'}],
+        messages:[{role:'user',content:prompt}]
+      })});
+    var d=await resp.json();
+    // Извлекаем JSON из ответа (может быть в text блоке после tool_result)
+    var txt='';
+    if(d.content&&d.content.length){
+      d.content.forEach(function(b){if(b.type==='text'&&b.text) txt+=b.text;});
+    }
+    var m=txt.match(/\{[\s\S]*?\}/);
+    if(m) return JSON.parse(m[0]);
+    return null;
+  }catch(e){console.warn('cadastral lookup failed',e);return null;}
 }
 
 var _chatImage=null; // base64 image pending send
@@ -1445,6 +1468,75 @@ function submitFeedback(){
   var b=document.querySelector('.fb-submit-btn');if(b){b.textContent='✓ Отправлено';b.disabled=true;}
 }
 function copyTxt(enc,btn){navigator.clipboard.writeText(decodeURIComponent(enc));btn.textContent='✓';setTimeout(()=>{btn.textContent='⎘ Копировать';},2000);}
+
+// ПОЛНОЕ ЛОГИРОВАНИЕ — вызывается вручную после работы оценщика
+function saveFullLog(){
+  if(!window._analysisDirty&&!_ai.verdict) return;
+  var ai=_ai,s=_snap;
+  var dn=document.getElementById('dealNumber');
+  var kad=document.getElementById('kadNumber');
+  // Фильтруем системный инжект из переписки
+  var realChat=_chat.filter(function(m){
+    return !(m.role==='user'&&typeof m.content==='string'&&m.content.startsWith('Проанализированы файлы'));
+  });
+  sendToSheets({
+    direction:'geo',type:'full_session',
+    ts:window._analysisTs||new Date().toISOString(),
+    ts_saved:new Date().toISOString(),
+    date:new Date().toLocaleString('ru-RU'),
+    deal:dn?dn.value:'',
+    kad:kad?kad.value:'',
+    object:document.getElementById('p_object').value||ai.object||'',
+    terr:(document.getElementById('p_terr').options[document.getElementById('p_terr').selectedIndex]||{}).text||'',
+    ga:document.getElementById('p_area').value||'',
+    dist_km:document.getElementById('p_dist').value||'',
+    polev_days:document.getElementById('p_days').value||'',
+    verdict:ai.verdict||'',verdict_reason:ai.verdict_reason||'',
+    confidence:(ai._verify||{}).confidence||'',
+    kp_no_nds:s.kp?Math.round(s.kp):'',
+    kp_nds:s.kpNds?Math.round(s.kpNds):'',
+    margin:s.margin||'',
+    geo_assumed:ai.geo_assumed||false,
+    has_geo:ai.has_geo||false,has_trassa:ai.has_trassa||false,
+    has_geo_geo:ai.has_geo_geo||false,has_eco:ai.has_eco||false,has_hydro:ai.has_hydro||false,
+    colleagues:(ai.colleagues_work||[]).join('; '),
+    files:_files.map(function(f){return f.name;}).join('; '),
+    p0_analysis:(ai._p0||'').substring(0,2000),
+    extracted_params:JSON.stringify({terrType:ai.terrType,area_ga:ai.area_ga,dist_km:ai.dist_km,days:ai.days,scale:ai.scale}),
+    sales_summary:ai.sales_summary||'',
+    // Переписка в читаемом виде
+    chat_readable:realChat.map(function(m){
+      var role=m.role==='user'?'👤 ОЦЕНЩИК':'🤖 МОДЕЛЬ';
+      var txt=typeof m.content==='string'?m.content:JSON.stringify(m.content);
+      return role+': '+txt;
+    }).join('\n---\n'),
+    chat_turns:realChat.length,
+    // Корректировки
+    corrections_readable:_recalcHistory.map(function(r){
+      return (r.ts||'').substring(11,16)+' | '+r.param+': '+r.kp_bylo+'₽→'+r.kp_stalo+'₽ ('+r.val+')';
+    }).join('\n'),
+    recalc_count:_recalcHistory.length,
+    kp_initial:_recalcHistory.length?_recalcHistory[0].kp_bylo:'',
+    kp_final:s.kp?Math.round(s.kp):'',
+    // Токены
+    input_tokens:window._lastUsage?window._lastUsage.input:'',
+    output_tokens:window._lastUsage?window._lastUsage.output:'',
+    cost_usd:window._lastUsage?Math.round(window._lastUsage.cost_usd*1000)/1000:''
+  });
+  window._analysisDirty=false;
+  var saveBtn=document.getElementById('saveLogBtn');
+  if(saveBtn){saveBtn.style.background='var(--ok)';saveBtn.textContent='✓ Сохранено';setTimeout(function(){saveBtn.style.background='';saveBtn.style.color='';saveBtn.textContent='💾 Сохранить оценку';},3000);}
+}
+
+// Авто-сохранение при закрытии вкладки
+window.addEventListener('beforeunload',function(e){
+  if(window._analysisDirty){
+    saveFullLog();
+    e.preventDefault();
+    e.returnValue='';
+  }
+});
+
 document.getElementById('tzText').addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='Enter')parseTZ();});
 document.getElementById('chatInp').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
 buildRatesUI();
