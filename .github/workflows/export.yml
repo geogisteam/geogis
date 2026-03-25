@@ -27,7 +27,7 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        run: python export_jsonl.py
+        run: python training/export_jsonl.py
 
       - name: Commit and push if data changed
         run: |
