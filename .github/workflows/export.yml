@@ -1,0 +1,40 @@
+name: Export Training Data
+
+on:
+  schedule:
+    # Каждый день в 21:00 UTC (00:00 МСК)
+    - cron: '0 21 * * *'
+  # Ручной запуск через GitHub UI (кнопка "Run workflow")
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Export sessions from Supabase to JSONL
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: python export_jsonl.py
+
+      - name: Commit and push if data changed
+        run: |
+          git config user.email "action@github.com"
+          git config user.name "GitHub Actions"
+          git add data/training_data.jsonl data/export_meta.json
+          git diff --staged --quiet || (
+            git commit -m "Training data export $(date -u +%Y-%m-%d)"
+            git push
+          )
