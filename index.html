@@ -293,18 +293,17 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
 // ГеоГис v3.2 — 2026-03-24 | pipeline: 2-4 проходов | geo_assumed | TOLL_TABLE | токен-лог
 // STATE
 // ═══ ВЕРСИЯ МОДЕЛИ — обновлять при каждом изменении промптов ════
-const MODEL_VERSION = "v4.2";
+const MODEL_VERSION = "v4.3";
 // ПРАВИЛО ОБНОВЛЕНИЯ ВЕРСИИ:
 // 1. Изменил промпт (GLOSSARY, PASS*_SYS, CHECK_SYS) → обязательно:
-//    a. Поднять MODEL_VERSION: v4.2 → v4.3
+//    a. Поднять MODEL_VERSION: v4.3 → v4.4
 //    b. Добавить строку в CHANGELOG сверху
 //    c. Сохранить файл
 // Зачем: без версии невозможно сравнить качество ДО и ПОСЛЕ изменения промптов.
 const CHANGELOG = [
-  { version: "v4.2", date: "28.03.2026", author: "—", changes: "Маслобойка: JSON/CSV/HTML dropzone; autofill из deal_summary.json; ИГДИ/ИЭИ/ИГИ в глоссарий; детектор ГПЗУ; скважины→координирование; ai_brief концентрат; расхождение площадей оранжевым; Supabase reload schema fix" },
+  { version: "v4.3", date: "28.03.2026", author: "—", changes: "resetState() при новом файле; area_verified=false оранжевый блок; ИГДИ+1:500 детектор; Москва→МГГТ риск; Supabase session_id reload fix" },
+  { version: "v4.2", date: "28.03.2026", author: "—", changes: "Маслобойка: JSON/CSV/HTML dropzone; autofill из deal_summary.json; ИГДИ/ИЭИ/ИГИ в глоссарий; детектор ГПЗУ; скважины→координирование; ai_brief концентрат" },
   { version: "v4.1", date: "24.03.2026", author: "—", changes: "ОКН, РЖД, min порог, камеральные в CHECK_SYS; НДС 22%; anti-hallucination для кадастра; geo_assumed логика; Supabase; оценщик ID" },
-  // При каждом изменении промптов добавлять строку СВЕРХУ:
-  // { version: "v4.3", date: "ДД.ММ.ГГГГ", author: "Имя оценщика", changes: "Что изменили" },
 ];
 // ════════════════════════════════════════════════════════════════
 
@@ -431,8 +430,42 @@ function toggleAcc(h){h.classList.toggle('open');var b=h.nextElementSibling;if(b
 function toB64(f){return new Promise(function(r,j){var x=new FileReader();x.onload=function(){r(x.result.split(',')[1]);};x.onerror=j;x.readAsDataURL(f);});}
 function loadJS(src){return new Promise(function(r,j){var s=document.createElement('script');s.src=src;s.onload=r;s.onerror=j;document.head.appendChild(s);});}
 
+// RESET STATE — сброс при загрузке нового документа
+function resetState(){
+  // Поля формы
+  var fields=['p_object','p_area','p_len','p_strip','p_dist','p_days','p_trassa','p_bathy','p_static','p_pvo','p_groN'];
+  fields.forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+  var sel=['p_terr','p_gro','p_wells'];
+  sel.forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+  var chk=['p_loca'];
+  chk.forEach(function(id){var e=document.getElementById(id);if(e)e.checked=false;});
+  document.getElementById('kadNumber').value='';
+  document.getElementById('dealNumber').value='';
+  document.getElementById('tzText').value='';
+  // Состояние
+  _ai={};_chat=[];_snap={};_recalcHistory=[];_kpPrev=0;_chatTs=[];
+  window._kadNum=null;window._kadUrl=null;
+  window._masloboykaData=null;window._masloboykaAiBrief=null;window._masloboykaCSVLen=null;
+  window._analysisTs=null;window._analysisDirty=false;window._lastUsage=null;
+  window._fbRating=null;
+  // UI
+  document.getElementById('resultArea').style.display='none';
+  document.getElementById('emptyState').style.display='flex';
+  document.getElementById('chatMsgs').innerHTML='<div class="msg-sys" style="font-size:15px;font-weight:700;color:var(--text);font-style:normal">Задайте вопрос, скорректируйте расчёт, напишите каких данных не хватает в программе</div>';
+  document.getElementById('mapsLinks').innerHTML='';
+  document.getElementById('fst').innerHTML='';
+  document.getElementById('logContent').innerHTML='После анализа появится лог.';
+  var lb=document.getElementById('logBdg');if(lb){lb.textContent='—';lb.className='bdg none';}
+  var pb=document.getElementById('paramBdg');if(pb){pb.textContent='0 извлечено';pb.className='bdg none';}
+  var sb=document.getElementById('specBdg');if(sb){sb.textContent='—';sb.className='bdg none';}
+  var saveBtn=document.getElementById('saveLogBtn');if(saveBtn)saveBtn.style.display='none';
+  buildRatesUI();
+  recalc();
+}
+
 async function handleFiles(inp){
   var files=[...inp.files];if(!files.length)return;
+  resetState(); // сбрасываем все данные предыдущего объекта
   var fst=document.getElementById('fst');
   fst.innerHTML='<span style="color:var(--muted)">⏳ Читаю файлы...</span>';
   _files=[];
@@ -539,20 +572,45 @@ async function handleFiles(inp){
 // МАСЛОБОЙКА — автозаполнение из deal_summary.json
 function applyMasloboykaJSON(d){
   var filled=[];
-  var sv=function(id,v){if(v!==undefined&&v!==null&&v!==''){var e=document.getElementById(id);if(e){e.value=v;return true;}}}; 
+  var sv=function(id,v){if(v!==undefined&&v!==null&&v!==''){var e=document.getElementById(id);if(e){e.value=v;return true;}}};
   if(d.address||d.object_address){var addr=d.address||d.object_address;sv('p_object',addr);updateMapsLinks();filled.push('адрес');}
   if(d.cadastral_number||d.cadastral){var kn=d.cadastral_number||d.cadastral;sv('kadNumber',kn);onKadInput(kn);filled.push('кадастр');}
   if(d.area_ha||d.area_ga||d.площадь){var ar=d.area_ha||d.area_ga||d.площадь;sv('p_area',ar);filled.push('площадь '+ar+' га');}
   if(d.length_km||d.протяженность_км||d.трасса_км){var lk=d.length_km||d.протяженность_км||d.трасса_км;sv('p_len',lk);filled.push('длина '+lk+' км');}
   if(d.dist_km||d.расстояние_мкад){sv('p_dist',d.dist_km||d.расстояние_мкад);filled.push('расстояние');}
-  // Конфликт JSON vs CSV — если уже есть данные из CSV, сравниваем
+
+  // area_verified=false → предупреждение (сохраняем для renderResult)
+  window._areaVerified=(d.area_verified!==false);
+  if(d.area_verified===false){
+    window._areaVerifiedNote=d.area_source||'площадь не подтверждена источником';
+  }
+
+  // Конфликт JSON vs CSV по длине
   if(window._masloboykaCSVLen&&d.length_km&&Math.abs(window._masloboykaCSVLen-d.length_km)>0.1){
     if(!_ai.risks) _ai.risks=[];
     _ai.risks.push('⚠ Расхождение длины: JSON='+d.length_km+'км vs CSV='+window._masloboykaCSVLen+'км — уточни у заказчика');
   }
+
+  // ИГДИ + 1:500 в тексте JSON → топосъёмка
+  var jsonStr=JSON.stringify(d).toLowerCase();
+  if((jsonStr.includes('игди')||jsonStr.includes('игди'))&&(jsonStr.includes('1:500')||jsonStr.includes('1500'))){
+    if(!_ai.risks) _ai.risks=[];
+    _ai.risks.push('ℹ ИГДИ + 1:500 обнаружены в JSON → это ТОПОСЪЁМКА (has_geo=true, не предположительно)');
+  }
+
+  // Москва → риск МГГТ
+  var addr2=(d.address||d.object_address||'').toLowerCase();
+  if(addr2.includes('москва')||addr2.includes('moscow')){
+    if(!_ai.risks) _ai.risks=[];
+    _ai.risks.push('⚠ Москва: требуется согласование в Мосгоргеотресте (МГГТ)');
+  }
+
   if(d.ai_brief) window._masloboykaAiBrief=d.ai_brief;
+  // area_verified: false → явное предупреждение
+  if(d.area_verified===false) window._areaNotVerified=true;
+  else window._areaNotVerified=false;
   recalc();
-  if(filled.length) addChatMsg('sys','🔧 Маслобойка (JSON): автозаполнено — '+filled.join(', ')+(d.ai_brief?'\n📋 ai_brief получен':''));
+  if(filled.length) addChatMsg('sys','🔧 Маслобойка (JSON): автозаполнено — '+filled.join(', ')+(d.ai_brief?'\n📋 ai_brief получен':'')+(d.area_verified===false?'\n⚠ area_verified=false — площадь требует уточнения':''));
 }
 
 function applyMasloboykaCSV(csvTxt,fname){
@@ -995,6 +1053,21 @@ async function parseTZ(){
     st.innerHTML='<span style="color:var(--green)">✓</span> '+(_files.length||1)+' файл · '+vp+pCount+' · <b style="color:'+cc2+'">'+(verify.confidence||'—')+'</b>'+tokenInfo+(p.geo_assumed?' · <span style="color:var(--yel)">⚠ вид работ предположен</span>':'')+(verify.missed&&verify.missed.length?' · <span style="color:var(--warn)">⚠'+verify.missed.length+' пропусков</span>':'');
     recalc();
 
+    // POST-PROCESSING: автодетекция по тексту ТЗ
+    var tzFull=(document.getElementById('tzText').value||'').toLowerCase();
+    var objAddr=(p.object||'').toLowerCase();
+    // Москва → МГГТ
+    if((tzFull.includes('москва')||objAddr.includes('москва'))&&p.has_geo){
+      if(!p.risks) p.risks=[];
+      if(!p.risks.some(function(r){return r.includes('МГГТ');}))
+        p.risks.push('Согласование в Мосгоргеотресте (МГГТ) — обязательно для объектов в Москве');
+    }
+    // ИГДИ + 1:500 → принудительно топосъёмка
+    if((tzFull.includes('игди')||tzFull.includes('игди'))&&(tzFull.includes('1:500')||tzFull.includes('1500'))){
+      p.has_geo=true; p.geo_assumed=false;
+      addChatMsg('sys','ℹ ИГДИ + 1:500 обнаружены → топосъёмка подтверждена (не предположительно)');
+    }
+
     var dn=document.getElementById('dealNumber');
     var dealNote=dn&&dn.value?' · № '+dn.value:'';
     var workNote=p.geo_assumed?'\n⚠ Вид работ явно не указан → расчёт для топосъёмки 1:500. Уточните у заказчика.':'';
@@ -1055,6 +1128,13 @@ function applyParams(p){
   var spec=[p.has_trassa,p.has_wells,p.has_loca,p.has_bathy,p.has_static].filter(Boolean).length;
   var sb=document.getElementById('specBdg');sb.textContent=spec>0?spec+' работы':'—';sb.className='bdg '+(spec>0?'ok':'none');
   if(spec>0) document.querySelectorAll('.ah').forEach(h=>{if(h.textContent.includes('Спецработы')){h.classList.add('open');h.nextElementSibling.classList.add('open');}});
+  // Москва → риск МГГТ (из ТЗ, не только из JSON)
+  var objVal=(p.object||document.getElementById('p_object').value||'').toLowerCase();
+  if(objVal.includes('москва')||objVal.includes('moscow')){
+    if(!p.risks) p.risks=[];
+    var hasMGGT=p.risks.some(function(r){return r.includes('МГГТ');});
+    if(!hasMGGT) p.risks.push('⚠ Москва: требуется согласование в Мосгоргеотресте (МГГТ)');
+  }
 }
 
 // RENDER LOG
@@ -1364,9 +1444,15 @@ function renderResult({lines,notIn,total,kp,kpNds,kpMin,kpMax,profit,margin,days
     briefHtml='<div style="background:linear-gradient(135deg,#fff8e8,#fff3d0);border:2px solid #e0a020;border-radius:6px;padding:12px 16px;margin-bottom:14px"><div style="font-family:monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#a06000;margin-bottom:7px">📋 Концентрат объекта (Маслобойка)</div><div style="font-size:13px;line-height:1.7;white-space:pre-wrap">'+window._masloboykaAiBrief+'</div></div>';
   }
 
-  // Расхождение площадей — крупный оранжевый стиль
+  // area_verified: false — явный флаг из Маслобойки
   var areaMismatchHtml='';
-  if(window._masloboykaData&&window._masloboykaData.area_ha){
+  if(window._areaVerified===false){
+    areaMismatchHtml='<div style="background:#ff6b00;border-radius:6px;padding:13px 16px;margin-bottom:14px">'
+      +'<div style="font-size:16px;font-weight:800;color:#fff;font-family:monospace">⚠ ПЛОЩАДЬ НЕ ПОДТВЕРЖДЕНА</div>'
+      +'<div style="font-size:13px;color:#ffe0c0;margin-top:5px">'+(window._areaVerifiedNote||'area_verified = false в JSON от Маслобойки')+'</div>'
+      +'<div style="font-size:12px;color:#ffd0a0;margin-top:3px">Уточни у заказчика или по кадастровой выписке</div>'
+      +'</div>';
+  } else if(window._masloboykaData&&window._masloboykaData.area_ha){
     var jsonArea=parseFloat(window._masloboykaData.area_ha)||0;
     var formArea=parseFloat(document.getElementById('p_area').value)||0;
     if(jsonArea>0&&formArea>0&&Math.abs(jsonArea-formArea)/Math.max(jsonArea,formArea)>0.1){
