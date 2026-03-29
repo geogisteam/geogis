@@ -228,7 +228,7 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><div style="font-family:JetBrains Mono,monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#aaa;white-space:nowrap">Кадастр №</div><input id="kadNumber" style="flex:1;padding:6px 9px;border:1px solid #e0ddd8;border-radius:6px;background:#fafaf8;font-family:JetBrains Mono,monospace;font-size:12px;color:#111;outline:none" type="text" placeholder="не известно" oninput="onKadInput(this.value)"></div>
     <div class="lbl">ТЗ / Запрос КП</div>
     <textarea class="tz" id="tzText" placeholder="Вставьте текст ТЗ или загрузите файлы..."></textarea>
-    <label class="file-zone">📎 PDF, DOCX/DOC, TXT, RTF, PNG/JPG — можно несколько<input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.rtf,.odt,.png,.jpg,.jpeg" multiple onchange="handleFiles(this)"></label>
+    <label class="file-zone">📎 PDF, DOCX, TXT, RTF, PNG/JPG, JSON, CSV, HTML — можно несколько<input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.rtf,.odt,.png,.jpg,.jpeg,.json,.csv,.html,.htm" multiple onchange="handleFiles(this)"></label>
     <div class="fst" id="fst"></div>
     <button class="parse-btn" id="parseBtn" onclick="parseTZ()">⚡ ИЗВЛЕЧЬ ПАРАМЕТРЫ</button>
     <button onclick="recalc()" style="margin-top:4px;width:100%;padding:7px;background:transparent;color:var(--accent);border:1.5px solid var(--accent);border-radius:4px;font-family:monospace;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer" id="recalcBtn">↻ ПЕРЕСЧИТАТЬ</button>
@@ -293,17 +293,18 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
 // ГеоГис v3.2 — 2026-03-24 | pipeline: 2-4 проходов | geo_assumed | TOLL_TABLE | токен-лог
 // STATE
 // ═══ ВЕРСИЯ МОДЕЛИ — обновлять при каждом изменении промптов ════
-const MODEL_VERSION = "v4.1";
+const MODEL_VERSION = "v4.2";
 // ПРАВИЛО ОБНОВЛЕНИЯ ВЕРСИИ:
 // 1. Изменил промпт (GLOSSARY, PASS*_SYS, CHECK_SYS) → обязательно:
-//    a. Поднять MODEL_VERSION: v4.1 → v4.2
+//    a. Поднять MODEL_VERSION: v4.2 → v4.3
 //    b. Добавить строку в CHANGELOG сверху
 //    c. Сохранить файл
 // Зачем: без версии невозможно сравнить качество ДО и ПОСЛЕ изменения промптов.
 const CHANGELOG = [
+  { version: "v4.2", date: "28.03.2026", author: "—", changes: "Маслобойка: JSON/CSV/HTML dropzone; autofill из deal_summary.json; ИГДИ/ИЭИ/ИГИ в глоссарий; детектор ГПЗУ; скважины→координирование; ai_brief концентрат; расхождение площадей оранжевым; Supabase reload schema fix" },
   { version: "v4.1", date: "24.03.2026", author: "—", changes: "ОКН, РЖД, min порог, камеральные в CHECK_SYS; НДС 22%; anti-hallucination для кадастра; geo_assumed логика; Supabase; оценщик ID" },
   // При каждом изменении промптов добавлять строку СВЕРХУ:
-  // { version: "v4.2", date: "ДД.ММ.ГГГГ", author: "Имя оценщика", changes: "Что изменили" },
+  // { version: "v4.3", date: "ДД.ММ.ГГГГ", author: "Имя оценщика", changes: "Что изменили" },
 ];
 // ════════════════════════════════════════════════════════════════
 
@@ -370,8 +371,8 @@ function sendToSheets(d){if(!SHEETS_URL)return;fetch(SHEETS_URL,{method:'POST',m
 
 async function sendToSupabase(d) {
   if (!SUPABASE_URL || !SUPABASE_KEY) return;
-  try {
-    var resp = await fetch(SUPABASE_URL + "/rest/v1/sessions", {
+  var doPost=async function(){
+    return fetch(SUPABASE_URL + "/rest/v1/sessions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -381,10 +382,26 @@ async function sendToSupabase(d) {
       },
       body: JSON.stringify(d)
     });
+  };
+  try {
+    var resp = await doPost();
     if (!resp.ok) {
       var err = await resp.text();
+      // Если ошибка про session_id — перезагружаем кеш PostgREST и повторяем
+      if(resp.status===400&&err&&err.includes('session_id')){
+        console.warn("Supabase: session_id not found, sending NOTIFY pgrst reload schema...");
+        await fetch(SUPABASE_URL+"/rest/v1/rpc/pg_notify",{
+          method:"POST",
+          headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":"Bearer "+SUPABASE_KEY},
+          body:JSON.stringify({channel:"pgrst",payload:"reload schema"})
+        }).catch(function(){});
+        // Ждём 1 сек и повторяем
+        await new Promise(function(r){setTimeout(r,1000);});
+        resp=await doPost();
+        if(resp.ok){console.log("✅ Supabase: retry успешен после reload schema");return;}
+        err=await resp.text();
+      }
       console.warn("Supabase error:", resp.status, err);
-      // Уведомляем администратора в Telegram
       if(TG_BOT_TOKEN && TG_CHAT_ID){
         var obj=document.getElementById('p_object')?document.getElementById('p_object').value:'—';
         var msg='⚠ ГеоГис: ошибка сохранения в Supabase'
@@ -465,6 +482,37 @@ async function handleFiles(inp){
         document.getElementById('tzText').value=(curT?curT+'\n\n':'')+('=== '+f.name+' ===\n')+prevT;
       } else if(f.name.toLowerCase().endsWith('.dwg')){
         errors.push('dwg:'+f.name);
+      } else if(f.name.toLowerCase().endsWith('.json')){
+        fst.innerHTML='<span style="color:var(--muted)">⏳ JSON: '+f.name+'...</span>';
+        var jsonTxt=await f.text();
+        var jsonObj=null;
+        try{ jsonObj=JSON.parse(jsonTxt); }catch(je){ errors.push(f.name+': невалидный JSON — '+je.message); continue; }
+        _files.push({type:'docx',text:jsonTxt,name:f.name,size:f.size,parsed:jsonObj});
+        // Маслобойка: autofill если version=1.0.0
+        if(jsonObj&&jsonObj.version==='1.0.0'){
+          window._masloboykaData=jsonObj;
+          applyMasloboykaJSON(jsonObj);
+        }
+        var curJ=document.getElementById('tzText').value;
+        document.getElementById('tzText').value=(curJ?curJ+'\n\n':'')+('=== '+f.name+' (JSON) ===\n')+jsonTxt.substring(0,3000);
+      } else if(f.name.toLowerCase().endsWith('.csv')){
+        fst.innerHTML='<span style="color:var(--muted)">⏳ CSV: '+f.name+'...</span>';
+        var csvTxt=await f.text();
+        _files.push({type:'docx',text:csvTxt,name:f.name,size:f.size});
+        // Маслобойка: ищем протяжённость трассы
+        applyMasloboykaCSV(csvTxt,f.name);
+        var curC=document.getElementById('tzText').value;
+        document.getElementById('tzText').value=(curC?curC+'\n\n':'')+('=== '+f.name+' (CSV) ===\n')+csvTxt.substring(0,3000);
+      } else if(f.name.toLowerCase().match(/\.(html|htm)$/)){
+        fst.innerHTML='<span style="color:var(--muted)">⏳ HTML: '+f.name+'...</span>';
+        var htmlTxt=await f.text();
+        // Извлекаем текст из HTML
+        var tmp=document.createElement('div');
+        tmp.innerHTML=htmlTxt;
+        var plainHtml=tmp.innerText||tmp.textContent||htmlTxt;
+        _files.push({type:'docx',text:plainHtml,name:f.name,size:f.size});
+        var curH=document.getElementById('tzText').value;
+        document.getElementById('tzText').value=(curH?curH+'\n\n':'')+('=== '+f.name+' (HTML) ===\n')+plainHtml.substring(0,3000);
       } else {
         errors.push(f.name+': неподдерживаемый формат (поддерживаются PDF, DOCX, PNG, JPG)');
       }
@@ -486,6 +534,49 @@ async function handleFiles(inp){
   if(otherErrors.length>0) html+='<span style="color:var(--warn);display:block;margin-top:4px">⚠ '+otherErrors.join('; ')+'</span>';
   fst.innerHTML=html||'<span style="color:var(--warn)">Файлы не загружены</span>';
   inp.value='';
+}
+
+// МАСЛОБОЙКА — автозаполнение из deal_summary.json
+function applyMasloboykaJSON(d){
+  var filled=[];
+  var sv=function(id,v){if(v!==undefined&&v!==null&&v!==''){var e=document.getElementById(id);if(e){e.value=v;return true;}}}; 
+  if(d.address||d.object_address){var addr=d.address||d.object_address;sv('p_object',addr);updateMapsLinks();filled.push('адрес');}
+  if(d.cadastral_number||d.cadastral){var kn=d.cadastral_number||d.cadastral;sv('kadNumber',kn);onKadInput(kn);filled.push('кадастр');}
+  if(d.area_ha||d.area_ga||d.площадь){var ar=d.area_ha||d.area_ga||d.площадь;sv('p_area',ar);filled.push('площадь '+ar+' га');}
+  if(d.length_km||d.протяженность_км||d.трасса_км){var lk=d.length_km||d.протяженность_км||d.трасса_км;sv('p_len',lk);filled.push('длина '+lk+' км');}
+  if(d.dist_km||d.расстояние_мкад){sv('p_dist',d.dist_km||d.расстояние_мкад);filled.push('расстояние');}
+  // Конфликт JSON vs CSV — если уже есть данные из CSV, сравниваем
+  if(window._masloboykaCSVLen&&d.length_km&&Math.abs(window._masloboykaCSVLen-d.length_km)>0.1){
+    if(!_ai.risks) _ai.risks=[];
+    _ai.risks.push('⚠ Расхождение длины: JSON='+d.length_km+'км vs CSV='+window._masloboykaCSVLen+'км — уточни у заказчика');
+  }
+  if(d.ai_brief) window._masloboykaAiBrief=d.ai_brief;
+  recalc();
+  if(filled.length) addChatMsg('sys','🔧 Маслобойка (JSON): автозаполнено — '+filled.join(', ')+(d.ai_brief?'\n📋 ai_brief получен':''));
+}
+
+function applyMasloboykaCSV(csvTxt,fname){
+  // Ищем протяжённость/трассу в CSV
+  var lines=csvTxt.split('\n');
+  var lengthKw=/протяж|трасса|длин|м\/км|length/i;
+  var numRx=/([0-9]+[.,][0-9]+|[0-9]+)/g;
+  for(var i=0;i<lines.length;i++){
+    if(lengthKw.test(lines[i])){
+      var nums=lines[i].match(numRx);
+      if(nums&&nums.length){
+        var val=parseFloat(nums[nums.length-1].replace(',','.'));
+        // Если число выглядит как метры (>100) — конвертируем в км
+        if(val>100) val=Math.round(val/100)/10;
+        if(val>0){
+          window._masloboykaCSVLen=val;
+          var el=document.getElementById('p_len');
+          if(el&&(!el.value||el.value==='0')){el.value=val;recalc();}
+          addChatMsg('sys','🔧 Маслобойка (CSV '+fname+'): длина трассы = '+val+' км');
+          break;
+        }
+      }
+    }
+  }
 }
 
 // MAPS
@@ -587,11 +678,11 @@ function showLogPanel(){
 // PROMPTS v4 — ГеоГис (геодезия, оптимизированный pipeline)
 
 var GLOSSARY=`ГЛОССАРИЙ:
-"инж.-геодезические изыскания","топосъёмка","топоплан" → НАШЕ, has_geo=true
+"инж.-геодезические изыскания","топосъёмка","топоплан","ИГДИ","ИГИ" → НАШЕ, has_geo=true (ОБЯЗАТЕЛЬНО, не предполагаемо)
 "масштаб 1:500/1:1000/1:2000" → scale
-"инж.-геологические изыскания","геология","бурение скважин" → НЕ НАШЕ, has_geo_geo=true
-"инж.-экологические изыскания","экология" → НЕ НАШЕ, has_eco=true
-"инж.-гидрометеорологические изыскания","гидромет" → НЕ НАШЕ, has_hydro=true
+"инж.-геологические изыскания","геология","бурение скважин","ИГИ (геология)" → НЕ НАШЕ, has_geo_geo=true
+"инж.-экологические изыскания","экология","ИЭИ" → НЕ НАШЕ, has_eco=true
+"инж.-гидрометеорологические изыскания","гидромет","Гидромет" → НЕ НАШЕ, has_hydro=true
 "техническое обследование зданий","дефектовка" → НЕ НАШЕ, has_survey_bld=true
 "трассировка сетей","ПДК","обследование коммуникаций" → has_trassa=true (НАШЕ)
 "вскрытие колодцев","шурфование" → has_wells=true
@@ -607,6 +698,10 @@ var GLOSSARY=`ГЛОССАРИЙ:
 Кадастровые номера, адреса, площади, даты, суммы договоров, номера документов.
 Если данные не найдены в документе ТОЧНО — писать null или "".
 Лучше пустое поле чем неверное. Неверный кадастровый номер = критическая ошибка.
+
+ДЕТЕКТОР ГПЗУ: Если встречается фраза "разработан при отсутствии топографической съемки" или "при отсутствии топосъёмки" → ОБЯЗАТЕЛЬНО добавить в recommendations и clarify_customer: "Требуется топосъёмка 1:500".
+СКВАЖИНЫ: Если встречается "Скважина №..." или "скв. №" → добавить в unmatched_works: "Координирование выработок (скважины)".
+ИГДИ/ИЭИ/ИГИ как аббревиатуры: если в тексте упомянуты без расшифровки → трактовать по контексту, ставить соответствующий флаг (has_geo/has_eco/has_geo_geo).
 
 ПРАВИЛО "ВИД РАБОТ НЕ УКАЗАН":
 Если нет явного вида изысканий, но есть адрес/объект/схема →
@@ -890,22 +985,7 @@ async function parseTZ(){
       window._kadNum=kadNum;
       window._kadUrl=showCadastralLink(kadNum);
       if(kadFld&&(!kadFld.value||kadFld.value==='не известно')) kadFld.value=kadNum;
-      addChatMsg('sys','📍 Кадастр '+kadNum+' — запрашиваю данные...');
-      lookupCadastralViaClaude(kadNum).then(function(res){
-        if(!res||res.address==='не найдено'){
-          addChatMsg('sys','📍 Кадастр '+kadNum+' — данные не найдены. Проверьте на ПКК: pkk.rosreestr.ru');
-          return;
-        }
-        var info='📍 Кадастр '+kadNum+':';
-        if(res.address) info+=' '+res.address;
-        if(res.area_ga&&res.area_ga>0) info+=' | '+res.area_ga+' га';
-        if(res.category) info+=' | '+res.category;
-        addChatMsg('sys',info);
-        var objFld=document.getElementById('p_object');
-        if(objFld&&(!objFld.value||objFld.value==='—')&&res.address){objFld.value=res.address;updateMapsLinks();}
-        var areaFld=document.getElementById('p_area');
-        if(areaFld&&(!areaFld.value||areaFld.value==='0')&&res.area_ga>0){areaFld.value=res.area_ga;recalc();}
-      });
+      triggerCadastralLookup(kadNum);
     }
 
     var vp=(hasPdf||hasImg)&&visualData&&visualData.t&&visualData.t.has_graphic?'2 визуал.+':'';
@@ -1278,7 +1358,27 @@ function renderResult({lines,notIn,total,kp,kpNds,kpMin,kpMax,profit,margin,days
   var addrV=document.getElementById('p_object').value||ai.object||'';
   var addrH=addrV?'<div style="background:#fff;border:1px solid #e8e6e0;border-radius:8px;padding:12px 14px;margin-bottom:14px"><div style="font-size:10px;color:#aaa;font-family:monospace;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Объект</div><div style="font-size:14px;font-weight:500;margin-bottom:5px">'+addrV+'</div>'+(document.getElementById('p_dist').value?'<div style="font-size:11px;color:#888;margin-bottom:7px">'+document.getElementById('p_dist').value+' км от МКАД</div>':'')+'<div style="display:flex;gap:6px;flex-wrap:wrap"><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://yandex.ru/maps/?text='+encodeURIComponent(addrV)+'" target="_blank">Яндекс.Карты</a><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://maps.google.com/?q='+encodeURIComponent(addrV)+'" target="_blank">Google Maps</a><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://2gis.ru/search/'+encodeURIComponent(addrV)+'" target="_blank">2ГИС</a>'+(window._kadNum?'<a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="'+window._kadUrl+'" target="_blank">📍 КПК '+window._kadNum+'</a>':'')+'</div></div>':'';
   var expertHtml=_snap.kp>0?'<div style="margin:10px 0"><button id="expertCheckBtn" onclick="runExpertCheck()" style="padding:8px 16px;border:1.5px solid var(--accent);border-radius:4px;background:transparent;font-family:monospace;font-size:12px;color:var(--accent);cursor:pointer">🔍 Экспертная проверка расчёта</button></div>':'';
-  ra.innerHTML=kpiH+addrH+vHtml+visualHtml+ubHtml+salesHtml+clHtml+winHtml+taskHtml+unmHtml+costHtml+expertHtml+rHtml;
+  // ai_brief — "Концентрат объекта" от Маслобойки (самый верх)
+  var briefHtml='';
+  if(window._masloboykaAiBrief){
+    briefHtml='<div style="background:linear-gradient(135deg,#fff8e8,#fff3d0);border:2px solid #e0a020;border-radius:6px;padding:12px 16px;margin-bottom:14px"><div style="font-family:monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#a06000;margin-bottom:7px">📋 Концентрат объекта (Маслобойка)</div><div style="font-size:13px;line-height:1.7;white-space:pre-wrap">'+window._masloboykaAiBrief+'</div></div>';
+  }
+
+  // Расхождение площадей — крупный оранжевый стиль
+  var areaMismatchHtml='';
+  if(window._masloboykaData&&window._masloboykaData.area_ha){
+    var jsonArea=parseFloat(window._masloboykaData.area_ha)||0;
+    var formArea=parseFloat(document.getElementById('p_area').value)||0;
+    if(jsonArea>0&&formArea>0&&Math.abs(jsonArea-formArea)/Math.max(jsonArea,formArea)>0.1){
+      areaMismatchHtml='<div style="background:#fff3e0;border:2.5px solid #ff8c00;border-radius:6px;padding:12px 16px;margin-bottom:14px">'
+        +'<div style="font-size:15px;font-weight:700;color:#e65c00;font-family:monospace">⚠ РАСХОЖДЕНИЕ ПЛОЩАДЕЙ</div>'
+        +'<div style="font-size:14px;color:#bf4000;margin-top:5px">JSON (Маслобойка): <b>'+jsonArea+' га</b> &nbsp;↔&nbsp; Форма: <b>'+formArea+' га</b></div>'
+        +'<div style="font-size:12px;color:#a03000;margin-top:3px">Разница '+Math.abs(jsonArea-formArea).toFixed(2)+' га ('+Math.round(Math.abs(jsonArea-formArea)/Math.max(jsonArea,formArea)*100)+'%) — уточни у заказчика какая площадь верная</div>'
+        +'</div>';
+    }
+  }
+
+  ra.innerHTML=briefHtml+areaMismatchHtml+kpiH+addrH+vHtml+visualHtml+ubHtml+salesHtml+clHtml+winHtml+taskHtml+unmHtml+costHtml+expertHtml+rHtml;
   if(notIn.length) runUnmatchedSearch(notIn);
 }
 
@@ -1400,7 +1500,40 @@ function onKadInput(val){
   if(!val||val==='не известно') return;
   var rx=/([0-9]+:[0-9]+:[0-9]+:[0-9]+)/;
   var m=val.match(rx);
-  if(m) window._kadNum=m[1];
+  if(m){
+    window._kadNum=m[1];
+    window._kadUrl=showCadastralLink(m[1]);
+    // Запускаем lookup через Claude с небольшой задержкой (не на каждый символ)
+    if(window._kadLookupTimer) clearTimeout(window._kadLookupTimer);
+    window._kadLookupTimer=setTimeout(function(){
+      triggerCadastralLookup(m[1]);
+    },800);
+  }
+}
+
+async function triggerCadastralLookup(kadNum){
+  addChatMsg('sys','📍 Ищу данные участка '+kadNum+'...');
+  var res=await lookupCadastralViaClaude(kadNum);
+  if(!res||res.address==='не найдено'||!res.address){
+    addChatMsg('sys','📍 Кадастр '+kadNum+' — данные не найдены. Проверьте вручную: pkk.rosreestr.ru');
+    return;
+  }
+  var info='📍 Кадастр '+kadNum+':';
+  if(res.address) info+=' '+res.address;
+  if(res.area_ga&&res.area_ga>0) info+=' | '+res.area_ga+' га';
+  if(res.category) info+=' | '+res.category;
+  addChatMsg('sys',info);
+  // Автозаполняем поля если пустые
+  var objFld=document.getElementById('p_object');
+  if(objFld&&(!objFld.value||objFld.value==='—')&&res.address){
+    objFld.value=res.address;
+    updateMapsLinks();
+  }
+  var areaFld=document.getElementById('p_area');
+  if(areaFld&&(!areaFld.value||areaFld.value==='0')&&res.area_ga>0){
+    areaFld.value=res.area_ga;
+    recalc();
+  }
 }
 // Запрашиваем данные кадастрового участка через Claude web_search
 async function lookupCadastralViaClaude(kadNum){
@@ -1442,25 +1575,6 @@ function attachChatImage(inp){
   inp.value='';
 }
 
-async function sendChat(){
-  try{
-    var enc=encodeURIComponent(kadNum.trim());
-    var url='https://pkk.rosreestr.ru/api/features/1?text='+enc+'&limit=1&tolerance=4';
-    var r=await fetch(url,{method:'GET',headers:{'Accept':'application/json'}});
-    if(!r.ok) return null;
-    var d=await r.json();
-    var feat=d&&d.features&&d.features[0];
-    if(!feat||!feat.attrs) return null;
-    var a=feat.attrs;
-    return {
-      address:a.address||a.cn||'',
-      area_m2:a.area_value||0,
-      area_ga:a.area_value?(Math.round(a.area_value/100)/100):0,
-      status:a.status_text||'',
-      category:a.category_type||''
-    };
-  }catch(e){return null;}
-}
 async function sendChat(){
   var inp=document.getElementById('chatInp');
   var msg=inp.value.trim();
