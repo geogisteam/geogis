@@ -474,7 +474,7 @@ function resetState(){
   // Состояние
   _ai={};_chat=[];_snap={};_recalcHistory=[];_kpPrev=0;_chatTs=[];
   window._kadNum=null;window._kadUrl=null;
-  window._masloboykaData=null;window._masloboykaAiBrief=null;window._masloboykaCSVLen=null;
+  window._masloboykaData=null;window._masloboykaAiBrief=null;window._masloboykaCSVLen=null;window._bridgeBundle=null;
   window._analysisTs=null;window._analysisDirty=false;window._lastUsage=null;
   window._fbRating=null;
   // UI
@@ -550,9 +550,8 @@ async function handleFiles(inp){
         var jsonObj=null;
         try{ jsonObj=JSON.parse(jsonTxt); }catch(je){ errors.push(f.name+': невалидный JSON — '+je.message); continue; }
         _files.push({type:'docx',text:jsonTxt,name:f.name,size:f.size,parsed:jsonObj});
-        // Маслобойка: autofill если version=1.0.0
-        if(jsonObj&&jsonObj.version==='1.0.0'){
-          window._masloboykaData=jsonObj;
+        // Bridge bundle: files[] + summary → новий формат
+        if(jsonObj&&Array.isArray(jsonObj.files)&&jsonObj.summary){
           applyMasloboykaJSON(jsonObj);
         }
         var curJ=document.getElementById('tzText').value;
@@ -598,62 +597,41 @@ async function handleFiles(inp){
   inp.value='';
 }
 
-// МАСЛОБОЙКА — автозаполнение из deal_summary.json
-function applyMasloboykaJSON(d){
-  var filled=[];
-  var sv=function(id,v){if(v!==undefined&&v!==null&&v!==''){var e=document.getElementById(id);if(e){e.value=v;return true;}}};
+// МАСЛОБОЙКА — bridge_bundle.json → Claude pipeline
+function applyMasloboykaJSON(bundle){
+  window._bridgeBundle=bundle;
 
-  // Нормалізація bridge-формату (вкладений) → плоский
-  var m=d.metrics||{}, lg=d.logistics||{};
-  if(!d.address&&!d.object_address&&d.addresses&&d.addresses.length) d.object_address=d.addresses[0];
-  if(!d.cadastral_number&&!d.cadastral&&d.cadastre&&d.cadastre.length) d.cadastral_number=d.cadastre[0];
-  if(!d.area_ha&&!d.area_ga){
-    var haArr=m.area_ha; var m2Arr=m.area_m2;
-    if(haArr&&haArr.length){var hv=parseFloat(String(haArr[0]).replace(/[^\d.]/g,''));if(!isNaN(hv))d.area_ha=hv;}
-    else if(m2Arr&&m2Arr.length){var mv=parseFloat(String(m2Arr[0]).replace(/\s/g,'').replace(',','.').replace(/[^\d.]/g,''));if(!isNaN(mv))d.area_ha=Math.round(mv/100)/100;}
-  }
-  if(!d.length_km&&m.length_km&&m.length_km.length){var lv=parseFloat(String(m.length_km[0]).replace(/[^\d.]/g,''));if(!isNaN(lv))d.length_km=lv;}
-  if(!d.dist_km&&lg.distance_km) d.dist_km=lg.distance_km;
+  // Збираємо content_md з усіх файлів зі статусом ok/partial
+  var parts=[];
+  var fileNames=[];
+  var failedNames=[];
 
-  if(d.address||d.object_address){var addr=d.address||d.object_address;sv('p_object',addr);updateMapsLinks();filled.push('адрес');}
-  if(d.cadastral_number||d.cadastral){var kn=d.cadastral_number||d.cadastral;sv('kadNumber',kn);onKadInput(kn);filled.push('кадастр');}
-  if(d.area_ha||d.area_ga||d.площадь){var ar=d.area_ha||d.area_ga||d.площадь;sv('p_area',ar);filled.push('площадь '+ar+' га');}
-  if(d.length_km||d.протяженность_км||d.трасса_км){var lk=d.length_km||d.протяженность_км||d.трасса_км;sv('p_len',lk);filled.push('длина '+lk+' км');}
-  if(d.dist_km||d.расстояние_мкад){sv('p_dist',d.dist_km||d.расстояние_мкад);filled.push('расстояние');}
+  (bundle.files||[]).forEach(function(f){
+    if(f.status==='failed'){
+      failedNames.push(f.name+(f.error?' ('+f.error+')':''));
+      return;
+    }
+    if(f.content_md&&f.content_md.trim()){
+      parts.push('=== '+f.name+' ===\n'+f.content_md);
+      fileNames.push(f.name);
+    }
+    if(f.tables_md&&f.tables_md.trim()){
+      parts.push('--- таблиці: '+f.name+' ---\n'+f.tables_md);
+    }
+  });
 
-  // area_verified=false → предупреждение (сохраняем для renderResult)
-  window._areaVerified=(d.area_verified!==false);
-  if(d.area_verified===false){
-    window._areaVerifiedNote=d.area_source||'площадь не подтверждена источником';
-  }
+  var combined=parts.join('\n\n---\n\n');
+  document.getElementById('tzText').value=combined;
 
-  // Конфликт JSON vs CSV по длине
-  if(window._masloboykaCSVLen&&d.length_km&&Math.abs(window._masloboykaCSVLen-d.length_km)>0.1){
-    if(!_ai.risks) _ai.risks=[];
-    _ai.risks.push('⚠ Расхождение длины: JSON='+d.length_km+'км vs CSV='+window._masloboykaCSVLen+'км — уточни у заказчика');
-  }
+  var s=bundle.summary||{};
+  var msg='🔧 Bridge bundle: '+(s.ok||0)+' ok / '+(s.partial||0)+' partial / '+(s.failed||0)+' failed';
+  if(fileNames.length) msg+='\n📝 Файли: '+fileNames.join(', ');
+  if(failedNames.length) msg+='\n⚠ Не оброблені: '+failedNames.join(', ');
+  msg+='\n⚡ Запускаю аналіз...';
+  addChatMsg('sys',msg);
 
-  // ИГДИ + 1:500 в тексте JSON → топосъёмка
-  var jsonStr=JSON.stringify(d).toLowerCase();
-  if((jsonStr.includes('игди')||jsonStr.includes('игди'))&&(jsonStr.includes('1:500')||jsonStr.includes('1500'))){
-    if(!_ai.risks) _ai.risks=[];
-    _ai.risks.push('ℹ ИГДИ + 1:500 обнаружены в JSON → это ТОПОСЪЁМКА (has_geo=true, не предположительно)');
-  }
-
-  // Москва → риск МГГТ
-  var addr2=(d.address||d.object_address||'').toLowerCase();
-  if(addr2.includes('москва')||addr2.includes('moscow')){
-    if(!_ai.risks) _ai.risks=[];
-    _ai.risks.push('⚠ Москва: требуется согласование в Мосгоргеотресте (МГГТ)');
-  }
-
-  if(d.ai_brief) window._masloboykaAiBrief=d.ai_brief;
-  if(d.markdown_text) window._masloboykaMarkdown=d.markdown_text;
-  // area_verified: false → явное предупреждение
-  if(d.area_verified===false) window._areaNotVerified=true;
-  else window._areaNotVerified=false;
-  recalc();
-  if(filled.length) addChatMsg('sys','🔧 Маслобойка (JSON): автозаполнено — '+filled.join(', ')+(d.ai_brief?'\n📋 ai_brief получен':'')+(d.area_verified===false?'\n⚠ area_verified=false — площадь требует уточнения':''));
+  // Запускаємо стандартний Claude pipeline — він заповнить форму
+  parseTZ();
 }
 
 function applyMasloboykaCSV(csvTxt,fname){
@@ -1610,15 +1588,18 @@ function buildChatSystem(){
       docxCtx+='\n--- '+f.name+' ---\n'+f.text.substring(0,1500);
     });
   }
-  // Markdown з bridge (Маслобойка-режим) — структурований документ для цитування
-  var mdCtx='';
-  if(window._masloboykaMarkdown){
-    mdCtx='\n\nСТРУКТУРА ДОКУМЕНТУ (Markdown з bridge, цитуй звідси):\n'
-      +window._masloboykaMarkdown.substring(0,4000);
+  // Bridge bundle summary — статус обробки файлів
+  var bundleCtx='';
+  if(window._bridgeBundle){
+    var bs=window._bridgeBundle.summary||{};
+    bundleCtx='\n\nBRIDGE BUNDLE: '+(bs.total||0)+' файлів ('
+      +(bs.ok||0)+' ok, '+(bs.partial||0)+' partial, '+(bs.failed||0)+' failed)';
+    if(bs.failed_files&&bs.failed_files.length)
+      bundleCtx+='\nНе оброблені: '+bs.failed_files.join(', ');
   }
   return 'Ты ассистент оценщика ГеоГис. ВАЖНО: у тебя ЕСТЬ полный контекст загруженных файлов и результатов анализа.\nФИКСИРОВАНО В СИСТЕМЕ: НДС = 22% с 01.01.2026 (ФЗ №425-ФЗ от 28.11.2025).. Не меняй и не обсуждай ставку НДС — она задана системой.'
     +'\nТЫ ПОМНИШЬ что было в документах. Отвечай конкретно по данному объекту.'
-    +'\n\nКОНТЕКСТ ОЦЕНКИ:'+filesStr+params+calc+vis+p0+docxCtx+mdCtx
+    +'\n\nКОНТЕКСТ ОЦЕНКИ:'+filesStr+params+calc+vis+p0+docxCtx+bundleCtx
     +'\n\nЕсли нужно изменить параметры — верни JSON:'
     +'\n{"p_days":null,"p_dist":null,"p_area":null,"p_margin":null,"p_coef":null,"p_accom":null,"comment":"ответ"}'
     +'\nПРАВИЛА РАБОТЫ С ПАРАМЕТРАМИ:'
