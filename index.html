@@ -602,6 +602,19 @@ async function handleFiles(inp){
 function applyMasloboykaJSON(d){
   var filled=[];
   var sv=function(id,v){if(v!==undefined&&v!==null&&v!==''){var e=document.getElementById(id);if(e){e.value=v;return true;}}};
+
+  // Нормалізація bridge-формату (вкладений) → плоский
+  var m=d.metrics||{}, lg=d.logistics||{};
+  if(!d.address&&!d.object_address&&d.addresses&&d.addresses.length) d.object_address=d.addresses[0];
+  if(!d.cadastral_number&&!d.cadastral&&d.cadastre&&d.cadastre.length) d.cadastral_number=d.cadastre[0];
+  if(!d.area_ha&&!d.area_ga){
+    var haArr=m.area_ha; var m2Arr=m.area_m2;
+    if(haArr&&haArr.length){var hv=parseFloat(String(haArr[0]).replace(/[^\d.]/g,''));if(!isNaN(hv))d.area_ha=hv;}
+    else if(m2Arr&&m2Arr.length){var mv=parseFloat(String(m2Arr[0]).replace(/\s/g,'').replace(',','.').replace(/[^\d.]/g,''));if(!isNaN(mv))d.area_ha=Math.round(mv/100)/100;}
+  }
+  if(!d.length_km&&m.length_km&&m.length_km.length){var lv=parseFloat(String(m.length_km[0]).replace(/[^\d.]/g,''));if(!isNaN(lv))d.length_km=lv;}
+  if(!d.dist_km&&lg.distance_km) d.dist_km=lg.distance_km;
+
   if(d.address||d.object_address){var addr=d.address||d.object_address;sv('p_object',addr);updateMapsLinks();filled.push('адрес');}
   if(d.cadastral_number||d.cadastral){var kn=d.cadastral_number||d.cadastral;sv('kadNumber',kn);onKadInput(kn);filled.push('кадастр');}
   if(d.area_ha||d.area_ga||d.площадь){var ar=d.area_ha||d.area_ga||d.площадь;sv('p_area',ar);filled.push('площадь '+ar+' га');}
