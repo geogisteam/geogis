@@ -494,6 +494,9 @@ function resetState(){
 
 async function handleFiles(inp){
   var files=[...inp.files];if(!files.length)return;
+  // Якщо серед файлів є bridge_bundle.json — обробляємо тільки його
+  var bundleFile=files.find(function(f){return f.name==='bridge_bundle.json';});
+  if(bundleFile){files=[bundleFile];}
   resetState(); // сбрасываем все данные предыдущего объекта
   var fst=document.getElementById('fst');
   fst.innerHTML='<span style="color:var(--muted)">⏳ Читаю файлы...</span>';
