@@ -293,7 +293,7 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
 // ГеоГис v3.2 — 2026-03-24 | pipeline: 2-4 проходов | geo_assumed | TOLL_TABLE | токен-лог
 // STATE
 // ═══ ВЕРСИЯ МОДЕЛИ — обновлять при каждом изменении промптов ════
-const MODEL_VERSION = "v4.3";
+const MODEL_VERSION = "v4.4";
 // ПРАВИЛО ОБНОВЛЕНИЯ ВЕРСИИ:
 // 1. Изменил промпт (GLOSSARY, PASS*_SYS, CHECK_SYS) → обязательно:
 //    a. Поднять MODEL_VERSION: v4.3 → v4.4
@@ -301,6 +301,7 @@ const MODEL_VERSION = "v4.3";
 //    c. Сохранить файл
 // Зачем: без версии невозможно сравнить качество ДО и ПОСЛЕ изменения промптов.
 const CHANGELOG = [
+  { version: "v4.4", date: "31.03.2026", author: "—", changes: "Quote & Ground в PASS12_SYS; markdown_text з bridge у контекст чату; telemetry виправлень естімейтора → Supabase corrections" },
   { version: "v4.3", date: "28.03.2026", author: "—", changes: "resetState() при новом файле; area_verified=false оранжевый блок; ИГДИ+1:500 детектор; Москва→МГГТ риск; Supabase session_id reload fix" },
   { version: "v4.2", date: "28.03.2026", author: "—", changes: "Маслобойка: JSON/CSV/HTML dropzone; autofill из deal_summary.json; ИГДИ/ИЭИ/ИГИ в глоссарий; детектор ГПЗУ; скважины→координирование; ai_brief концентрат" },
   { version: "v4.1", date: "24.03.2026", author: "—", changes: "ОКН, РЖД, min порог, камеральные в CHECK_SYS; НДС 22%; anti-hallucination для кадастра; geo_assumed логика; Supabase; оценщик ID" },
@@ -327,6 +328,11 @@ function trackParamChange(id,label){
   el.addEventListener('change',function(){
     var kb=_kpPrev||(_snap.kp||0);
     setTimeout(function(){var ka=_snap.kp||0;if(ka!==kb){_recalcHistory.push({ts:new Date().toISOString(),param:label,val:el.value,kp_bylo:kb,kp_stalo:ka});_kpPrev=ka;}},300);
+    // Telemetry: виправлення після аналізу → Supabase corrections
+    if(_ai){
+      var aiVals={p_area:_ai.area_ga,p_days:_ai.days,p_dist:_ai.dist_km,p_terr:_ai.terrType,p_coef:null,p_trassa:_ai.has_trassa};
+      sendCorrectionToSupabase(label,aiVals[id],el.value);
+    }
   });
 }
 function initParamWatchers(){
@@ -420,6 +426,29 @@ async function sendToSupabase(d) {
     console.warn("Supabase save failed:", e.message);
   }
 }
+// Telemetry: зберігаємо виправлення естімейтора для Experience RAG
+async function sendCorrectionToSupabase(param, aiValue, correctedValue) {
+  if (!SUPABASE_URL || !SUPABASE_KEY || !_ai) return;
+  fetch(SUPABASE_URL + "/rest/v1/corrections", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_KEY,
+      "Authorization": "Bearer " + SUPABASE_KEY,
+      "Prefer": "return=minimal"
+    },
+    body: JSON.stringify({
+      session_id: _sessionId || null,
+      ts: new Date().toISOString(),
+      param: param,
+      ai_value: String(aiValue !== null && aiValue !== undefined ? aiValue : ''),
+      corrected_value: String(correctedValue || ''),
+      object_name: (document.getElementById('p_object') || {}).value || '',
+      context_snippet: (_ai._p0 || '').substring(0, 500)
+    })
+  }).catch(function() {});
+}
+
 var PROXY='https://igdi-proxy.veklsandiego.workers.dev/';
 
 // Ресайзеры убраны — страница прокручивается как одна
@@ -606,6 +635,7 @@ function applyMasloboykaJSON(d){
   }
 
   if(d.ai_brief) window._masloboykaAiBrief=d.ai_brief;
+  if(d.markdown_text) window._masloboykaMarkdown=d.markdown_text;
   // area_verified: false → явное предупреждение
   if(d.area_verified===false) window._areaNotVerified=true;
   else window._areaNotVerified=false;
@@ -788,7 +818,11 @@ days=ПОЛЕВЫЕ (не срок договора!). contract_days=срок и
   Нашёл точно → записывай как есть в object или dist_note.
   Не нашёл / не уверен → object="" (ЗАПРЕЩЕНО ПРИДУМЫВАТЬ номера!)
   Неверный кадастровый номер хуже пустого поля.
-Перед JSON — 3-5 строк что нашёл. JSON:
+АЛГОРИТМ QUOTE & GROUND:
+1. Виписуй дослівні цитати для кожного знайденого параметру: «цитата з документу» → параметр=значення
+2. Якщо параметр відсутній — ставь null/0/false/"". Не екстраполюй, не вигадуй.
+3. Кадастровий номер — тільки якщо знайдений дослівно в тексті.
+Перед JSON — 3-5 рядків цитат і висновків. JSON:
 {"object":"","object_source":"прямо/по заказчику/ориентировочно","dist_km":0,"terrType":"незастр_простой/незастр_сложный/застр_простой/застр_средний/застр_сложный/промзона_простой/промзона_сложный/дендро_парк/дендро_лес","area_ga":0,"length_km":0,"strip_m":50,"days":0,"contract_days":0,"dist_note":"","has_geo":true,"geo_assumed":false,"has_trassa":false,"has_wells":false,"has_razb":false,"has_exec":false,"has_loca":false,"has_bathy":false,"has_static":false,"has_geo_geo":false,"has_eco":false,"has_hydro":false,"has_survey_bld":false,"needs_expertise":false,"coord_system":"","scale":"","norms":[],"drill_count":0,"drill_depth_m":0,"special_conditions":[]}`;
 
 var PASS3A_SYS=`Ты оценщик ГеоГис.
@@ -1563,9 +1597,15 @@ function buildChatSystem(){
       docxCtx+='\n--- '+f.name+' ---\n'+f.text.substring(0,1500);
     });
   }
+  // Markdown з bridge (Маслобойка-режим) — структурований документ для цитування
+  var mdCtx='';
+  if(window._masloboykaMarkdown){
+    mdCtx='\n\nСТРУКТУРА ДОКУМЕНТУ (Markdown з bridge, цитуй звідси):\n'
+      +window._masloboykaMarkdown.substring(0,4000);
+  }
   return 'Ты ассистент оценщика ГеоГис. ВАЖНО: у тебя ЕСТЬ полный контекст загруженных файлов и результатов анализа.\nФИКСИРОВАНО В СИСТЕМЕ: НДС = 22% с 01.01.2026 (ФЗ №425-ФЗ от 28.11.2025).. Не меняй и не обсуждай ставку НДС — она задана системой.'
     +'\nТЫ ПОМНИШЬ что было в документах. Отвечай конкретно по данному объекту.'
-    +'\n\nКОНТЕКСТ ОЦЕНКИ:'+filesStr+params+calc+vis+p0+docxCtx
+    +'\n\nКОНТЕКСТ ОЦЕНКИ:'+filesStr+params+calc+vis+p0+docxCtx+mdCtx
     +'\n\nЕсли нужно изменить параметры — верни JSON:'
     +'\n{"p_days":null,"p_dist":null,"p_area":null,"p_margin":null,"p_coef":null,"p_accom":null,"comment":"ответ"}'
     +'\nПРАВИЛА РАБОТЫ С ПАРАМЕТРАМИ:'
