@@ -1039,15 +1039,7 @@ async function parseTZ(){
 
     // P1+P2 ОБЪЕДИНЁН
     st.innerHTML='<span class="spinner"></span> Проход 1/2 — параметры и технические требования...';
-    var p12=await apiCall(PASS12_SYS+(_TAXONOMY?`
-
----
-ТАКСОНОМІЯ:
-
-${_TAXONOMY}
-
----
-`:""),buildAnalysisContent(normPfx+fewShot,rawText,pdfFiles,docxFiles,imgFiles),3500);
+    var p12=await apiCall(getPASS12WithTaxonomy(),buildAnalysisContent(normPfx+fewShot,rawText,pdfFiles,docxFiles,imgFiles),3500);
 
     // P3A+P3B ПАРАЛЛЕЛЬНО
     st.innerHTML='<span class="spinner"></span> Проход 2/2 — вердикт и анализ...';
