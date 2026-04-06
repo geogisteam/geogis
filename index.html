@@ -817,7 +817,37 @@ days=ПОЛЕВЫЕ (не срок договора!). contract_days=срок и
 2. Якщо параметр відсутній — ставь null/0/false/"". Не екстраполюй, не вигадуй.
 3. Кадастровий номер — тільки якщо знайдений дослівно в тексті.
 Перед JSON — 3-5 рядків цитат і висновків. JSON:
-{"object":"","object_source":"прямо/по заказчику/ориентировочно","dist_km":0,"terrType":"незастр_простой/незастр_сложный/застр_простой/застр_средний/застр_сложный/промзона_простой/промзона_сложный/дендро_парк/дендро_лес","area_ga":0,"length_km":0,"strip_m":50,"days":0,"contract_days":0,"dist_note":"","has_geo":true,"geo_assumed":false,"has_trassa":false,"has_wells":false,"has_razb":false,"has_exec":false,"has_loca":false,"has_bathy":false,"has_static":false,"has_geo_geo":false,"has_eco":false,"has_hydro":false,"has_survey_bld":false,"needs_expertise":false,"coord_system":"","scale":"","norms":[],"drill_count":0,"drill_depth_m":0,"special_conditions":[]}`;
+{"object":"","object_source":"прямо/по заказчику/ориентировочно","dist_km":0,"terrType":"незастр_простой/незастр_сложный/застр_простой/застр_средний/застр_сложный/промзона_простой/промзона_сложный/дендро_парк/дендро_лес","area_ga":0,"length_km":0,"strip_m":50,"days":0,"contract_days":0,"dist_note":"","has_geo":true,"geo_assumed":false,"has_trassa":false,"has_wells":false,"has_razb":false,"has_exec":false,"has_loca":false,"has_bathy":false,"has_static":false,"has_geo_geo":false,"has_eco":false,"has_hydro":false,"has_survey_bld":false,"needs_expertise":false,"coord_system":"","scale":"","norms":[],"drill_count":0,"drill_depth_m":0,"special_conditions":[]}`
+
+
+// Load taxonomy async from GitHub or local file
+var _TAXONOMY_TEXT = "";
+(async function loadTaxonomy(){
+  let urls = [
+    window.location.protocol === "file:"
+      ? new URL("PASS12_SYS.md", window.location.href).href  // file:///path/to/PASS12_SYS.md
+      : "PASS12_SYS.md"
+  ];
+  urls.push("https://raw.githubusercontent.com/geogisteam/geogis/main/PASS12_SYS.md");  // GitHub fallback
+
+  for(const url of urls) {
+    try {
+      const resp = await fetch(url, {cache: "no-cache"});
+      if(resp.ok) {
+        _TAXONOMY_TEXT = await resp.text();
+        console.log("[Taxonomy] Loaded from", url, "—", _TAXONOMY_TEXT.length, "chars");
+        break;
+      }
+    } catch(e) { console.log("[Taxonomy] Try next:", e.message); }
+  }
+  if(!_TAXONOMY_TEXT) console.warn("[Taxonomy] Failed to load from all sources");
+})();
+
+// Helper: get PASS12_SYS with injected taxonomy
+function getPASS12WithTaxonomy(){
+  if(!_TAXONOMY_TEXT) return PASS12_SYS;
+  return PASS12_SYS + "\n\n---\n# ТАКСОНОМІЯ ПАРАМЕТРІВ\n\n" + _TAXONOMY_TEXT + "\n\n---\n";
+}
 
 var PASS3A_SYS=`Ты оценщик ГеоГис.
 База 1057 сделок: незастр=277-282к, застр=199-290к, промзона=303-455к, дендро=76-388к руб.
@@ -1009,7 +1039,15 @@ async function parseTZ(){
 
     // P1+P2 ОБЪЕДИНЁН
     st.innerHTML='<span class="spinner"></span> Проход 1/2 — параметры и технические требования...';
-    var p12=await apiCall(PASS12_SYS,buildAnalysisContent(normPfx+fewShot,rawText,pdfFiles,docxFiles,imgFiles),3500);
+    var p12=await apiCall(PASS12_SYS+(_TAXONOMY?`
+
+---
+ТАКСОНОМІЯ:
+
+${_TAXONOMY}
+
+---
+`:""),buildAnalysisContent(normPfx+fewShot,rawText,pdfFiles,docxFiles,imgFiles),3500);
 
     // P3A+P3B ПАРАЛЛЕЛЬНО
     st.innerHTML='<span class="spinner"></span> Проход 2/2 — вердикт и анализ...';
@@ -1466,33 +1504,8 @@ function renderResult({lines,notIn,total,kp,kpNds,kpMin,kpMax,profit,margin,days
   var addrV=document.getElementById('p_object').value||ai.object||'';
   var addrH=addrV?'<div style="background:#fff;border:1px solid #e8e6e0;border-radius:8px;padding:12px 14px;margin-bottom:14px"><div style="font-size:10px;color:#aaa;font-family:monospace;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Объект</div><div style="font-size:14px;font-weight:500;margin-bottom:5px">'+addrV+'</div>'+(document.getElementById('p_dist').value?'<div style="font-size:11px;color:#888;margin-bottom:7px">'+document.getElementById('p_dist').value+' км от МКАД</div>':'')+'<div style="display:flex;gap:6px;flex-wrap:wrap"><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://yandex.ru/maps/?text='+encodeURIComponent(addrV)+'" target="_blank">Яндекс.Карты</a><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://maps.google.com/?q='+encodeURIComponent(addrV)+'" target="_blank">Google Maps</a><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://2gis.ru/search/'+encodeURIComponent(addrV)+'" target="_blank">2ГИС</a>'+(window._kadNum?'<a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="'+window._kadUrl+'" target="_blank">📍 КПК '+window._kadNum+'</a>':'')+'</div></div>':'';
   var expertHtml=_snap.kp>0?'<div style="margin:10px 0"><button id="expertCheckBtn" onclick="runExpertCheck()" style="padding:8px 16px;border:1.5px solid var(--accent);border-radius:4px;background:transparent;font-family:monospace;font-size:12px;color:var(--accent);cursor:pointer">🔍 Экспертная проверка расчёта</button></div>':'';
-  // ai_brief — "Концентрат объекта" от Маслобойки (самый верх)
-  var briefHtml='';
-  if(window._masloboykaAiBrief){
-    briefHtml='<div style="background:linear-gradient(135deg,#fff8e8,#fff3d0);border:2px solid #e0a020;border-radius:6px;padding:12px 16px;margin-bottom:14px"><div style="font-family:monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#a06000;margin-bottom:7px">📋 Концентрат объекта (Маслобойка)</div><div style="font-size:13px;line-height:1.7;white-space:pre-wrap">'+window._masloboykaAiBrief+'</div></div>';
-  }
 
-  // area_verified: false — явный флаг из Маслобойки
-  var areaMismatchHtml='';
-  if(window._areaVerified===false){
-    areaMismatchHtml='<div style="background:#ff6b00;border-radius:6px;padding:13px 16px;margin-bottom:14px">'
-      +'<div style="font-size:16px;font-weight:800;color:#fff;font-family:monospace">⚠ ПЛОЩАДЬ НЕ ПОДТВЕРЖДЕНА</div>'
-      +'<div style="font-size:13px;color:#ffe0c0;margin-top:5px">'+(window._areaVerifiedNote||'area_verified = false в JSON от Маслобойки')+'</div>'
-      +'<div style="font-size:12px;color:#ffd0a0;margin-top:3px">Уточни у заказчика или по кадастровой выписке</div>'
-      +'</div>';
-  } else if(window._masloboykaData&&window._masloboykaData.area_ha){
-    var jsonArea=parseFloat(window._masloboykaData.area_ha)||0;
-    var formArea=parseFloat(document.getElementById('p_area').value)||0;
-    if(jsonArea>0&&formArea>0&&Math.abs(jsonArea-formArea)/Math.max(jsonArea,formArea)>0.1){
-      areaMismatchHtml='<div style="background:#fff3e0;border:2.5px solid #ff8c00;border-radius:6px;padding:12px 16px;margin-bottom:14px">'
-        +'<div style="font-size:15px;font-weight:700;color:#e65c00;font-family:monospace">⚠ РАСХОЖДЕНИЕ ПЛОЩАДЕЙ</div>'
-        +'<div style="font-size:14px;color:#bf4000;margin-top:5px">JSON (Маслобойка): <b>'+jsonArea+' га</b> &nbsp;↔&nbsp; Форма: <b>'+formArea+' га</b></div>'
-        +'<div style="font-size:12px;color:#a03000;margin-top:3px">Разница '+Math.abs(jsonArea-formArea).toFixed(2)+' га ('+Math.round(Math.abs(jsonArea-formArea)/Math.max(jsonArea,formArea)*100)+'%) — уточни у заказчика какая площадь верная</div>'
-        +'</div>';
-    }
-  }
-
-  ra.innerHTML=briefHtml+areaMismatchHtml+kpiH+addrH+vHtml+visualHtml+ubHtml+salesHtml+clHtml+winHtml+taskHtml+unmHtml+costHtml+expertHtml+rHtml;
+  ra.innerHTML=kpiH+addrH+vHtml+visualHtml+ubHtml+salesHtml+clHtml+winHtml+taskHtml+unmHtml+costHtml+expertHtml+rHtml;
   if(notIn.length) runUnmatchedSearch(notIn);
 }
 
