@@ -127,6 +127,13 @@ textarea.tz::placeholder{color:var(--bd)}
 .arr{transition:transform .2s}
 .ah.open .arr{transform:rotate(90deg)}
 .ab{display:none;padding:11px 16px;border-bottom:1px solid var(--border);background:var(--s2)}
+.scr-card{border-radius:6px;padding:14px 16px;margin-bottom:14px;font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:1.6}
+.scr-card .scr-title{font-weight:700;font-size:14px;margin-bottom:4px}
+.scr-tag{border-radius:3px;padding:1px 7px;font-size:11px;margin:1px 3px 1px 0;display:inline-block}
+.scr-tag.ours{background:#e8f5e9;border:1px solid #a5d6a7}
+.scr-tag.others{background:#fff3e0;border:1px solid #ffb74d}
+.scr-tag.unclear{background:#f3f3f3;border:1px solid #ccc}
+.scr-calc-btn{margin-top:12px;padding:7px 16px;border:1.5px solid var(--accent);border-radius:4px;background:transparent;font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--accent);cursor:pointer;font-weight:600}
 .ab.open{display:block}
 .pr{display:flex;align-items:center;gap:7px;margin-bottom:6px}
 .pr.dim{opacity:.3}
@@ -816,6 +823,7 @@ days=ПОЛЕВЫЕ (не срок договора!). contract_days=срок и
 1. Виписуй дослівні цитати для кожного знайденого параметру: «цитата з документу» → параметр=значення
 2. Якщо параметр відсутній — ставь null/0/false/"". Не екстраполюй, не вигадуй.
 3. Кадастровий номер — тільки якщо знайдений дослівно в тексті.
+CAD PRIORITY: якщо в даних є блок [DWG/DXF], його площа та метрики мають найвищий пріоритет над цифрами текстового ТЗ. Вкажи в special_conditions "CAD: area=X га" якщо є CAD-дані.
 Перед JSON — 3-5 рядків цитат і висновків. JSON:
 {"object":"","object_source":"прямо/по заказчику/ориентировочно","dist_km":0,"terrType":"незастр_простой/незастр_сложный/застр_простой/застр_средний/застр_сложный/промзона_простой/промзона_сложный/дендро_парк/дендро_лес","area_ga":0,"length_km":0,"strip_m":50,"days":0,"contract_days":0,"dist_note":"","has_geo":true,"geo_assumed":false,"has_trassa":false,"has_wells":false,"has_razb":false,"has_exec":false,"has_loca":false,"has_bathy":false,"has_static":false,"has_geo_geo":false,"has_eco":false,"has_hydro":false,"has_survey_bld":false,"needs_expertise":false,"coord_system":"","scale":"","norms":[],"drill_count":0,"drill_depth_m":0,"special_conditions":[]}`
 
@@ -847,6 +855,68 @@ var _TAXONOMY_TEXT = "";
 function getPASS12WithTaxonomy(){
   if(!_TAXONOMY_TEXT) return PASS12_SYS;
   return PASS12_SYS + "\n\n---\n# ТАКСОНОМІЯ ПАРАМЕТРІВ\n\n" + _TAXONOMY_TEXT + "\n\n---\n";
+}
+
+// SCREENING_SYS — легкий перший прохід, ~800 токенів
+var SCREENING_SYS=`Ти фільтр скрінінгу ГеоГіс (геодезія, СРО вишукувальників).
+ЗАВДАННЯ: визначити — наш це проект чи ні? НЕ рахуй ціни. НЕ витягуй всі параметри.
+
+ТВЕРДІ СТОПИ (автовідхилення, verdict="reject"):
+1. Воєнний/режимний об'єкт: ЗСУ, МО, військова частина, секретний, воєнна база, бойова
+2. Жодної геодезичної роботи: тільки геологія / екологія / гідромет / БТІ / кадастрова реєстрація
+
+М'ЯКИЙ ФЛАГ (не відхиляти, dist_flag=true):
+3. Відстань від Москви або від офісу > 1000 км
+
+АЛГОРИТМ:
+1. Знайди ВСІ згадані види робіт у документі
+2. Класифікуй кожну: НАША (є в геодезичній таксономії нижче) / ЧУЖА / НЕЗРОЗУМІЛО
+3. Перевір стопи
+4. Якщо відстань згадана — витягни dist_km
+
+Відповідай ТІЛЬКИ JSON без пояснень:
+{"verdict":"target|reject|unclear","reject_reasons":[],"works_ours":[],"works_others":[],"works_unclear":[],"dist_km":null,"dist_flag":false,"screening_note":""}
+
+verdict: "target"=наш проект, "reject"=є стоп-фактор, "unclear"=вид робіт не вказано явно`;
+
+function getScreeningSys(){
+  if(!_TAXONOMY_TEXT) return SCREENING_SYS;
+  return SCREENING_SYS + "\n\n# ТАКСОНОМІЯ (для класифікації НАША/ЧУЖА):\n" + _TAXONOMY_TEXT.slice(0,4000);
+}
+
+function renderScreeningCard(scr, isReject){
+  if(!scr) return;
+  var verdictIcon = scr.verdict==='reject' ? '🔴' : scr.verdict==='unclear' ? '🟡' : '🟢';
+  var verdictLabel = scr.verdict==='reject' ? 'ВІДХИЛИТИ' : scr.verdict==='unclear' ? 'УТОЧНИТИ' : 'ЦІЛЬОВИЙ';
+  var verdictColor = scr.verdict==='reject' ? '#c0392b' : scr.verdict==='unclear' ? '#e67e22' : '#1a5c35';
+
+  var reasonsHtml = (scr.reject_reasons||[]).length
+    ? '<div style="margin-top:8px"><b>Причини:</b><ul style="margin:4px 0 0 14px;padding:0">'+(scr.reject_reasons.map(function(r){return '<li>'+r+'</li>';}).join(''))+'</ul></div>' : '';
+  var oursHtml = (scr.works_ours||[]).length
+    ? '<div style="margin-top:8px"><b>Наші роботи:</b><br>'+(scr.works_ours.map(function(w){return '<span class="scr-tag ours">'+w+'</span>';}).join(''))+'</div>' : '';
+  var othersHtml = (scr.works_others||[]).length
+    ? '<div style="margin-top:6px"><b>Чужі роботи:</b><br>'+(scr.works_others.map(function(w){return '<span class="scr-tag others">'+w+'</span>';}).join(''))+'</div>' : '';
+  var unclearHtml = (scr.works_unclear||[]).length
+    ? '<div style="margin-top:6px"><b>Незрозуміло:</b><br>'+(scr.works_unclear.map(function(w){return '<span class="scr-tag unclear">'+w+'</span>';}).join(''))+'</div>' : '';
+  var distHtml = scr.dist_flag
+    ? '<div style="margin-top:8px;padding:6px 10px;background:#fff8e1;border:1px solid #ffe082;border-radius:4px;font-size:12px">⚠️ Відстань '+(scr.dist_km||'> 1000')+' км — вимагає обговорення</div>' : '';
+  var noteHtml = scr.screening_note
+    ? '<div style="margin-top:8px;font-size:11px;color:var(--muted)">'+scr.screening_note+'</div>' : '';
+  var calcBtn = isReject
+    ? '<button class="scr-calc-btn" onclick="window._skipScreening=true;parseTZ()">Все одно підрахувати детально →</button>' : '';
+
+  var html = '<div class="scr-card" style="border:2px solid '+verdictColor+'">'
+    +'<div class="scr-title" style="color:'+verdictColor+'">'+verdictIcon+' '+verdictLabel+'</div>'
+    +reasonsHtml+oursHtml+othersHtml+unclearHtml+distHtml+noteHtml+calcBtn+'</div>';
+
+  if(isReject){
+    document.getElementById('emptyState').style.display='none';
+    var ra=document.getElementById('resultArea');
+    ra.style.display='block';
+    ra.innerHTML=html;
+  } else {
+    window._pendingScreeningHtml=html;
+  }
 }
 
 var PASS3A_SYS=`Ты оценщик ГеоГис.
@@ -1002,6 +1072,29 @@ async function parseTZ(){
   var btn=document.getElementById('parseBtn'),st=document.getElementById('pst');
   btn.disabled=true;_unmRunning=false;_unmCancelled=true;
 
+  // СКРІНІНГ — лёгкий перший прохід (~800 токенів)
+  if(!window._skipScreening){
+    st.innerHTML='<span class="spinner"></span> Скрінінг проекту...';
+    try{
+      var _scrPdf=_files.filter(function(f){return f.type==='pdf';});
+      var _scrDocx=_files.filter(function(f){return f.type==='docx';});
+      var _scrImg=_files.filter(function(f){return f.type==='image';});
+      var _scr=await apiCall(getScreeningSys(),buildAnalysisContent('',rawText,_scrPdf,_scrDocx,_scrImg),800);
+      window._lastScreening=_scr;
+      if(_scr&&_scr.verdict==='reject'){
+        renderScreeningCard(_scr,true);
+        btn.disabled=false;st.innerHTML='';_parsing=false;return;
+      }
+      if(_scr&&(_scr.verdict==='unclear'||_scr.dist_flag)){
+        var _scrNote=(_scr.verdict==='unclear'?'🟡 Вид робіт не вказано — розраховуємо як топозйомку 1:500. ':'')+(_scr.dist_flag?'⚠️ Відстань '+(_scr.dist_km||'> 1000')+' км.':'');
+        st.innerHTML=_scrNote+'<span class="spinner" style="margin-left:6px"></span>';
+        window._pendingScreeningHtml=null;
+        renderScreeningCard(_scr,false);
+      }
+    }catch(e){console.warn('[Screening] failed:',e);}
+  }
+  window._skipScreening=false;
+
   var pdfFiles=_files.filter(function(f){return f.type==='pdf';});
   var docxFiles=_files.filter(function(f){return f.type==='docx';});
   var imgFiles=_files.filter(function(f){return f.type==='image';});
@@ -1110,6 +1203,12 @@ async function parseTZ(){
     var tokenInfo=window._lastUsage&&window._lastUsage.calls>0?' · '+window._lastUsage.calls+' зап., ~$'+window._lastUsage.cost_usd.toFixed(3):'';
     st.innerHTML='<span style="color:var(--green)">✓</span> '+(_files.length||1)+' файл · '+vp+pCount+' · <b style="color:'+cc2+'">'+(verify.confidence||'—')+'</b>'+tokenInfo+(p.geo_assumed?' · <span style="color:var(--yel)">⚠ вид работ предположен</span>':'')+(verify.missed&&verify.missed.length?' · <span style="color:var(--warn)">⚠'+verify.missed.length+' пропусков</span>':'');
     recalc();
+    // Prepend screening summary card if present (unclear / dist_flag)
+    if(window._pendingScreeningHtml){
+      var _ra=document.getElementById('resultArea');
+      if(_ra&&_ra.style.display!=='none') _ra.innerHTML=window._pendingScreeningHtml+_ra.innerHTML;
+      window._pendingScreeningHtml=null;
+    }
 
     // POST-PROCESSING: автодетекция по тексту ТЗ
     var tzFull=(document.getElementById('tzText').value||'').toLowerCase();
