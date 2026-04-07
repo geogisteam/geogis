@@ -309,7 +309,7 @@ const MODEL_VERSION = "v4.4";
 //    c. Сохранить файл
 // Зачем: без версии невозможно сравнить качество ДО и ПОСЛЕ изменения промптов.
 const CHANGELOG = [
-  { version: "v4.4", date: "31.03.2026", author: "—", changes: "Quote & Ground в PASS12_SYS; markdown_text з bridge у контекст чату; telemetry виправлень естімейтора → Supabase corrections" },
+  { version: "v4.4", date: "31.03.2026", author: "—", changes: "Quote & Ground в PASS12_SYS; markdown_text из bridge в контекст чата; telemetry исправлений эстиматора → Supabase corrections" },
   { version: "v4.3", date: "28.03.2026", author: "—", changes: "resetState() при новом файле; area_verified=false оранжевый блок; ИГДИ+1:500 детектор; Москва→МГГТ риск; Supabase session_id reload fix" },
   { version: "v4.2", date: "28.03.2026", author: "—", changes: "Маслобойка: JSON/CSV/HTML dropzone; autofill из deal_summary.json; ИГДИ/ИЭИ/ИГИ в глоссарий; детектор ГПЗУ; скважины→координирование; ai_brief концентрат" },
   { version: "v4.1", date: "24.03.2026", author: "—", changes: "ОКН, РЖД, min порог, камеральные в CHECK_SYS; НДС 22%; anti-hallucination для кадастра; geo_assumed логика; Supabase; оценщик ID" },
@@ -336,7 +336,7 @@ function trackParamChange(id,label){
   el.addEventListener('change',function(){
     var kb=_kpPrev||(_snap.kp||0);
     setTimeout(function(){var ka=_snap.kp||0;if(ka!==kb){_recalcHistory.push({ts:new Date().toISOString(),param:label,val:el.value,kp_bylo:kb,kp_stalo:ka});_kpPrev=ka;}},300);
-    // Telemetry: виправлення після аналізу → Supabase corrections
+    // Telemetry: исправления после анализа → Supabase corrections
     if(_ai){
       var aiVals={p_area:_ai.area_ga,p_days:_ai.days,p_dist:_ai.dist_km,p_terr:_ai.terrType,p_coef:null,p_trassa:_ai.has_trassa};
       sendCorrectionToSupabase(label,aiVals[id],el.value);
@@ -635,7 +635,7 @@ function applyMasloboykaJSON(bundle){
       fileNames.push(f.name);
     }
     if(f.tables_md&&f.tables_md.trim()){
-      parts.push('--- таблиці: '+f.name+' ---\n'+f.tables_md);
+      parts.push('--- таблицы: '+f.name+' ---\n'+f.tables_md);
     }
   });
 
@@ -644,9 +644,9 @@ function applyMasloboykaJSON(bundle){
 
   var s=bundle.summary||{};
   var msg='🔧 Bridge bundle: '+(s.ok||0)+' ok / '+(s.partial||0)+' partial / '+(s.failed||0)+' failed';
-  if(fileNames.length) msg+='\n📝 Файли: '+fileNames.join(', ');
-  if(failedNames.length) msg+='\n⚠ Не оброблені: '+failedNames.join(', ');
-  msg+='\n⚡ Запускаю аналіз...';
+  if(fileNames.length) msg+='\n📝 Файлы: '+fileNames.join(', ');
+  if(failedNames.length) msg+='\n⚠ Не обработаны: '+failedNames.join(', ');
+  msg+='\n⚡ Запускаю анализ...';
   addChatMsg('sys',msg);
 
   // Запускаем стандартный Claude pipeline — он заполнит форму
@@ -828,11 +828,11 @@ days=ПОЛЕВЫЕ (не срок договора!). contract_days=срок и
   Не нашёл / не уверен → object="" (ЗАПРЕЩЕНО ПРИДУМЫВАТЬ номера!)
   Неверный кадастровый номер хуже пустого поля.
 АЛГОРИТМ QUOTE & GROUND:
-1. Виписуй дослівні цитати для кожного знайденого параметру: «цитата з документу» → параметр=значення
-2. Якщо параметр відсутній — ставь null/0/false/"". Не екстраполюй, не вигадуй.
-3. Кадастровий номер — тільки якщо знайдений дослівно в тексті.
+1. Выписывай дословные цитаты для каждого найденного параметра: «цитата из документа» → параметр=значение
+2. Если параметр отсутствует — ставь null/0/false/"". Не экстраполируй, не придумывай.
+3. Кадастровый номер — только если найден дословно в тексте.
 CAD PRIORITY: если в данных есть блок [DWG/DXF], его площадь и метрики имеют наивысший приоритет над цифрами текстового ТЗ. Укажи в special_conditions "CAD: area=X га" если есть CAD-данные.
-Перед JSON — 3-5 рядків цитат і висновків. JSON:
+Перед JSON — 3-5 строк цитат и выводов. JSON:
 {"object":"","object_source":"прямо/по заказчику/ориентировочно","dist_km":0,"terrType":"незастр_простой/незастр_сложный/застр_простой/застр_средний/застр_сложный/промзона_простой/промзона_сложный/дендро_парк/дендро_лес","area_ga":0,"length_km":0,"strip_m":50,"days":0,"contract_days":0,"dist_note":"","has_geo":true,"geo_assumed":false,"has_trassa":false,"has_wells":false,"has_razb":false,"has_exec":false,"has_loca":false,"has_bathy":false,"has_static":false,"has_geo_geo":false,"has_eco":false,"has_hydro":false,"has_survey_bld":false,"needs_expertise":false,"coord_system":"","scale":"","norms":[],"drill_count":0,"drill_depth_m":0,"special_conditions":[]}`
 
 
@@ -1084,9 +1084,9 @@ async function parseTZ(){
   var btn=document.getElementById('parseBtn'),st=document.getElementById('pst');
   btn.disabled=true;_unmRunning=false;_unmCancelled=true;
 
-  // СКРІНІНГ — лёгкий перший прохід (~800 токенів)
+  // СКРИНИНГ — лёгкий первый проход (~800 токенов)
   if(!window._skipScreening){
-    st.innerHTML='<span class="spinner"></span> Скрінінг проекту...';
+    st.innerHTML='<span class="spinner"></span> Скрининг проекта...';
     try{
       var _scrPdf=_files.filter(function(f){return f.type==='pdf';});
       var _scrDocx=_files.filter(function(f){return f.type==='docx';});
@@ -1836,14 +1836,14 @@ function buildChatSystem(){
       docxCtx+='\n--- '+f.name+' ---\n'+f.text.substring(0,1500);
     });
   }
-  // Bridge bundle summary — статус обробки файлів
+  // Bridge bundle summary — статус обработки файлов
   var bundleCtx='';
   if(window._bridgeBundle){
     var bs=window._bridgeBundle.summary||{};
-    bundleCtx='\n\nBRIDGE BUNDLE: '+(bs.total||0)+' файлів ('
+    bundleCtx='\n\nBRIDGE BUNDLE: '+(bs.total||0)+' файлов ('
       +(bs.ok||0)+' ok, '+(bs.partial||0)+' partial, '+(bs.failed||0)+' failed)';
     if(bs.failed_files&&bs.failed_files.length)
-      bundleCtx+='\nНе оброблені: '+bs.failed_files.join(', ');
+      bundleCtx+='\nНе обработаны: '+bs.failed_files.join(', ');
   }
   return 'Ты ассистент оценщика ГеоГис. ВАЖНО: у тебя ЕСТЬ полный контекст загруженных файлов и результатов анализа.\nФИКСИРОВАНО В СИСТЕМЕ: НДС = 22% с 01.01.2026 (ФЗ №425-ФЗ от 28.11.2025). Не меняй и не обсуждай ставку НДС — она задана системой.'
     +'\nТЫ ПОМНИШЬ что было в документах. Отвечай конкретно по данному объекту.'
