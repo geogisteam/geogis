@@ -1103,7 +1103,15 @@ async function apiCall(system,content,maxTok,_retry,model){
   var raw=rawT.replace(/```json|```/g,'').trim();
   var m=raw.match(/\{[\s\S]*\}/);
   if(!m){if(!_retry)return apiCall('Отвечай ТОЛЬКО JSON. '+system,content,maxTok,true);throw new Error('Нет JSON');}
-  try{return JSON.parse(m[0]);}catch(e){throw new Error('JSON parse: '+e.message);}
+  try{return JSON.parse(m[0]);}catch(e){
+    // Claude sometimes returns literal control chars inside string values — sanitize and retry
+    try{
+      var fixed=m[0].replace(/"[^"\\]*(?:\\[\s\S][^"\\]*)*"/g,function(s){
+        return s.replace(/\n/g,'\\n').replace(/\r/g,'\\r').replace(/\t/g,'\\t');
+      });
+      return JSON.parse(fixed);
+    }catch(e2){throw new Error('JSON parse: '+e.message);}
+  }
 }
 async function apiCallText(system,content,maxTok,model){
   maxTok=maxTok||3000;
