@@ -238,7 +238,8 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
     <label class="file-zone">📎 PDF, DOCX, TXT, RTF, PNG/JPG, JSON, CSV, HTML — можно несколько<input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.rtf,.odt,.png,.jpg,.jpeg,.json,.csv,.html,.htm" multiple onchange="handleFiles(this)"></label>
     <div class="fst" id="fst"></div>
     <button class="parse-btn" id="parseBtn" onclick="parseTZ()">⚡ ИЗВЛЕЧЬ ПАРАМЕТРЫ</button>
-    <button onclick="recalc()" style="margin-top:4px;width:100%;padding:7px;background:transparent;color:var(--accent);border:1.5px solid var(--accent);border-radius:4px;font-family:monospace;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer" id="recalcBtn">↻ ПЕРЕСЧИТАТЬ</button>
+    <button onclick="calcBtn_Stage()" style="margin-top:4px;width:100%;padding:7px;background:var(--accent);color:#fff;border:1.5px solid var(--accent);border-radius:4px;font-family:monospace;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer" id="calcBtn">↓ РАССЧИТАТЬ</button>
+    <button onclick="recalc()" style="margin-top:3px;width:100%;padding:7px;background:transparent;color:var(--accent);border:1.5px solid var(--accent);border-radius:4px;font-family:monospace;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer" id="recalcBtn">↻ ПЕРЕСЧИТАТЬ</button>
     <div class="pst" id="pst"></div>
   </div>
   <div class="lp-scroll">
@@ -247,32 +248,32 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
     <div class="ah open" onclick="toggleAcc(this)"><span>Параметры объекта</span><span style="display:flex;align-items:center;gap:5px"><span class="bdg none" id="paramBdg">0 извлечено</span><span class="arr">▶</span></span></div>
     <div class="ab open">
       <div class="lbl" style="margin-bottom:3px">Объект / адрес</div>
-      <input class="pi wide" id="p_object" type="text" placeholder="—" oninput="updateMapsLinks();recalc()" style="margin-bottom:5px">
+      <input class="pi wide" id="p_object" type="text" placeholder="—" oninput="updateMapsLinks()" style="margin-bottom:5px">
       <div id="mapsLinks" class="maps-row" style="margin-bottom:8px"></div>
       <div class="pr dim" id="pr_terr"><div class="pl">Тип территории</div><select class="pi wide" id="p_terr" onchange="onTerrChange()"><option value="">— выбрать —</option><option value="630">Незастр., простой, ТАХ</option><option value="840">Незастр., сложный, ТАХ</option><option value="1250">Застр., простой, ТАХ</option><option value="1620">Застр., средний, RTK</option><option value="1740">Застр., сложный, RTK</option><option value="1670">Промзона, простой</option><option value="2500">Промзона, сложный</option><option value="1950">Дендро, парки/скверы</option><option value="2500d">Дендро, густой лес</option></select></div>
-      <div class="pr dim" id="pr_area"><div class="pl">Площадь</div><input class="pi" id="p_area" type="number" placeholder="0" min="0" step="0.1" oninput="recalc()"><div class="pu">га</div></div>
-      <div class="pr dim" id="pr_len"><div class="pl">Трасса</div><input class="pi" id="p_len" type="number" placeholder="0" min="0" step="0.1" oninput="updateStripVisibility();recalc()"><div class="pu">км</div></div>
-      <div class="pr dim" id="pr_strip" style="display:none"><div class="pl">Полоса трассы</div><input class="pi" id="p_strip" type="number" value="50" min="0" oninput="recalc()"><div class="pu">м</div></div>
-      <div class="pr dim" id="pr_dist"><div class="pl">Расстояние от МКАД</div><input class="pi" id="p_dist" type="number" placeholder="0" min="0" oninput="recalc()"><div class="pu">км</div></div>
-      <div class="pr dim" id="pr_days"><div class="pl">Полевых дней</div><input class="pi" id="p_days" type="number" placeholder="авто" min="1" oninput="recalc()"><div class="pu">дн.</div></div>
-      <div class="pr hit"><div class="pl">Бригада</div><input class="pi" id="p_crew" type="number" value="2" min="1" max="6" oninput="recalc()"><div class="pu">чел.</div></div>
-      <div class="pr hit"><div class="pl">Проживание (2 чел/ночь)</div><input class="pi" id="p_accom" type="number" value="5000" min="0" oninput="recalc()"><div class="pu">₽/ночь</div></div>
+      <div class="pr dim" id="pr_area"><div class="pl">Площадь</div><input class="pi" id="p_area" type="number" placeholder="0" min="0" step="0.1"><div class="pu">га</div></div>
+      <div class="pr dim" id="pr_len"><div class="pl">Трасса</div><input class="pi" id="p_len" type="number" placeholder="0" min="0" step="0.1" oninput="updateStripVisibility()"><div class="pu">км</div></div>
+      <div class="pr dim" id="pr_strip" style="display:none"><div class="pl">Полоса трассы</div><input class="pi" id="p_strip" type="number" value="50" min="0"><div class="pu">м</div></div>
+      <div class="pr dim" id="pr_dist"><div class="pl">Расстояние от МКАД</div><input class="pi" id="p_dist" type="number" placeholder="0" min="0"><div class="pu">км</div></div>
+      <div class="pr dim" id="pr_days"><div class="pl">Полевых дней</div><input class="pi" id="p_days" type="number" placeholder="авто" min="1"><div class="pu">дн.</div></div>
+      <div class="pr hit"><div class="pl">Бригада</div><input class="pi" id="p_crew" type="number" value="2" min="1" max="6"><div class="pu">чел.</div></div>
+      <div class="pr hit"><div class="pl">Проживание (2 чел/ночь)</div><input class="pi" id="p_accom" type="number" value="5000" min="0"><div class="pu">₽/ночь</div></div>
     </div>
     <div class="ah" onclick="toggleAcc(this)"><span>Спецработы</span><span style="display:flex;align-items:center;gap:5px"><span class="bdg none" id="specBdg">—</span><span class="arr">▶</span></span></div>
     <div class="ab">
-      <div class="pr dim" id="pr_trassa"><div class="pl">Трассировка подз. коммуникаций <span style="font-size:10px;color:var(--green)">86%</span></div><input class="pi" id="p_trassa" type="number" value="0" min="0" placeholder="га" oninput="recalc()"><div class="pu">га</div></div>
-      <div class="pr dim" id="pr_wells"><div class="pl">Вскрытие колодцев <span style="font-size:10px;color:var(--green)">86%</span></div><select class="pi" id="p_wells" onchange="recalc()" style="width:120px"><option value="0">Нет</option><option value="150">Незастр.(150)</option><option value="2750">Застр.(2750)</option><option value="8000">Промз.(8000)</option></select></div>
-      <div class="pr dim" id="pr_gro"><div class="pl">ГРО закрепление</div><select class="pi" id="p_gro" onchange="recalc()" style="width:120px"><option value="0">Нет</option><option value="4500">Временное</option><option value="9000">Долговрем.</option></select></div>
-      <div class="pr dim" id="pr_groN"><div class="pl">Пунктов ГРО</div><input class="pi" id="p_groN" type="number" value="0" min="0" oninput="recalc()"><div class="pu">шт.</div></div>
-      <div class="pr dim" id="pr_pvo"><div class="pl">Точки ПВО</div><input class="pi" id="p_pvo" type="number" value="0" min="0" oninput="recalc()"><div class="pu">шт.</div></div>
-      <div class="pr dim" id="pr_bathy"><div class="pl">Батиметрия</div><input class="pi" id="p_bathy" type="number" value="0" min="0" oninput="recalc()"><div class="pu">га</div></div>
-      <div class="pr dim" id="pr_static"><div class="pl">Статика</div><input class="pi" id="p_static" type="number" value="0" min="0" oninput="recalc()"><div class="pu">точек</div></div>
-      <div class="cr dim" id="cr_loca"><input type="checkbox" id="p_loca" onchange="recalc()"><label for="p_loca">Локализация <span style="font-size:10px;color:var(--green)">65%</span></label></div>
+      <div class="pr dim" id="pr_trassa"><div class="pl">Трассировка подз. коммуникаций <span style="font-size:10px;color:var(--green)">86%</span></div><input class="pi" id="p_trassa" type="number" value="0" min="0" placeholder="га"><div class="pu">га</div></div>
+      <div class="pr dim" id="pr_wells"><div class="pl">Вскрытие колодцев <span style="font-size:10px;color:var(--green)">86%</span></div><select class="pi" id="p_wells" style="width:120px"><option value="0">Нет</option><option value="150">Незастр.(150)</option><option value="2750">Застр.(2750)</option><option value="8000">Промз.(8000)</option></select></div>
+      <div class="pr dim" id="pr_gro"><div class="pl">ГРО закрепление</div><select class="pi" id="p_gro" style="width:120px"><option value="0">Нет</option><option value="4500">Временное</option><option value="9000">Долговрем.</option></select></div>
+      <div class="pr dim" id="pr_groN"><div class="pl">Пунктов ГРО</div><input class="pi" id="p_groN" type="number" value="0" min="0"><div class="pu">шт.</div></div>
+      <div class="pr dim" id="pr_pvo"><div class="pl">Точки ПВО</div><input class="pi" id="p_pvo" type="number" value="0" min="0"><div class="pu">шт.</div></div>
+      <div class="pr dim" id="pr_bathy"><div class="pl">Батиметрия</div><input class="pi" id="p_bathy" type="number" value="0" min="0"><div class="pu">га</div></div>
+      <div class="pr dim" id="pr_static"><div class="pl">Статика</div><input class="pi" id="p_static" type="number" value="0" min="0"><div class="pu">точек</div></div>
+      <div class="cr dim" id="cr_loca"><input type="checkbox" id="p_loca"><label for="p_loca">Локализация <span style="font-size:10px;color:var(--green)">65%</span></label></div>
     </div>
     <div class="ah" onclick="toggleAcc(this)"><span>Коэффициенты и маржа</span><span class="arr">▶</span></div>
     <div class="ab">
-      <div class="pr hit"><div class="pl">Коэф. удалённости</div><select class="pi" id="p_coef" onchange="recalc()" style="width:150px"><option value="1.0">×1.0 — до 150 км</option><option value="1.1">×1.1 — МО+эксп.</option><option value="1.2">×1.2 — 150–300 км</option><option value="1.4">×1.4 — >300 км</option><option value="2.0">×2.0 — далеко</option><option value="2.3">×2.3 — скальные</option></select></div>
-      <div class="pr hit"><div class="pl">Маржа КП</div><input class="pi" id="p_margin" type="number" value="84" min="10" max="300" oninput="this.dataset.manuallySet='1';recalc()"><div class="pu">%</div></div>
+      <div class="pr hit"><div class="pl">Коэф. удалённости</div><select class="pi" id="p_coef" style="width:150px"><option value="1.0">×1.0 — до 150 км</option><option value="1.1">×1.1 — МО+эксп.</option><option value="1.2">×1.2 — 150–300 км</option><option value="1.4">×1.4 — >300 км</option><option value="2.0">×2.0 — далеко</option><option value="2.3">×2.3 — скальные</option></select></div>
+      <div class="pr hit"><div class="pl">Маржа КП</div><input class="pi" id="p_margin" type="number" value="84" min="10" max="300" oninput="this.dataset.manuallySet='1'"><div class="pu">%</div></div>
     </div>
     <div class="ah" onclick="toggleAcc(this)"><span>Справочник ставок</span><span class="arr">▶</span></div>
     <div class="ab"><div style="font-family:monospace;font-size:11px;color:var(--muted);margin-bottom:7px">Зелёные — в расчёте · 1057 реальных сделок 2025-2026</div><div id="ratesContent"></div></div>
@@ -315,7 +316,7 @@ const CHANGELOG = [
 ];
 // ════════════════════════════════════════════════════════════════
 
-var _ai={}, _files=[], _chat=[], _snap={};
+var _ai={}, _files=[], _chat=[], _snap={}, _versions=[];
 
 // ═══ SUPABASE ════════════════════════════════════════════════════
 // Telegram alert — заполни своими данными:
@@ -433,7 +434,7 @@ async function sendToSupabase(d) {
     console.warn("Supabase save failed:", e.message);
   }
 }
-// Telemetry: зберігаємо виправлення естімейтора для Experience RAG
+// Телеметрия: сохраняем исправления оценщика для Experience RAG
 async function sendCorrectionToSupabase(param, aiValue, correctedValue) {
   if (!SUPABASE_URL || !SUPABASE_KEY || !_ai) return;
   fetch(SUPABASE_URL + "/rest/v1/corrections", {
@@ -501,7 +502,7 @@ function resetState(){
 
 async function handleFiles(inp){
   var files=[...inp.files];if(!files.length)return;
-  // Якщо серед файлів є bridge_bundle.json — обробляємо тільки його
+  // Если среди файлов есть bridge_bundle.json — обрабатываем только его
   var bundleFile=files.find(function(f){return f.name==='bridge_bundle.json';});
   if(bundleFile){files=[bundleFile];}
   resetState(); // сбрасываем все данные предыдущего объекта
@@ -554,6 +555,8 @@ async function handleFiles(inp){
         document.getElementById('tzText').value=(curT?curT+'\n\n':'')+('=== '+f.name+' ===\n')+prevT;
       } else if(f.name.toLowerCase().endsWith('.dwg')){
         errors.push('dwg:'+f.name);
+      } else if(f.name.toLowerCase().endsWith('.dxf')){
+        errors.push('dxf:'+f.name);
       } else if(f.name.toLowerCase().endsWith('.json')){
         fst.innerHTML='<span style="color:var(--muted)">⏳ JSON: '+f.name+'...</span>';
         var jsonTxt=await f.text();
@@ -595,12 +598,18 @@ async function handleFiles(inp){
     _files.forEach(f=>{html+='<span class="fn">'+(f.type==='pdf'?'📄':'📝')+' '+f.name+' ('+Math.round(f.size/1024)+'KB)</span>';});
   }
   var dwgFiles = errors.filter(e=>e.startsWith('dwg:'));
-  var otherErrors = errors.filter(e=>!e.startsWith('dwg:'));
+  var dxfFiles = errors.filter(e=>e.startsWith('dxf:'));
+  var otherErrors = errors.filter(e=>!e.startsWith('dwg:')&&!e.startsWith('dxf:'));
   if(dwgFiles.length>0){
     html+='<div style="margin-top:6px;padding:8px 10px;background:#fdf8e0;border:1px solid #c0a030;border-radius:4px;font-size:12px">';
     html+='<b style="color:var(--yel)">DWG не читаю.</b> Конвертируй в PNG: ';
     html+='<a href="https://cloudconvert.com/dwg-to-png" target="_blank" style="color:var(--accent);font-weight:600;text-decoration:none">cloudconvert.com →</a> (бесплатно, 5 мин)';
     html+='<div style="color:var(--muted);margin-top:3px">Файлы: '+dwgFiles.map(e=>e.slice(4)).join(', ')+'</div></div>';
+  }
+  if(dxfFiles.length>0){
+    html+='<div style="margin-top:6px;padding:8px 10px;background:#e4f0e7;border:1px solid #3a8a4a;border-radius:4px;font-size:12px">';
+    html+='<b style="color:var(--ok)">DXF файлы — обработаны bridge.py.</b> Загрузи вместо этого JSON bundle: <code style="background:#fff;padding:2px 4px;border-radius:2px;font-family:monospace;font-size:11px">bridge_bundle.json</code>';
+    html+='<div style="color:var(--muted);margin-top:3px">Файлы: '+dxfFiles.map(e=>e.slice(4)).join(', ')+'</div></div>';
   }
   if(otherErrors.length>0) html+='<span style="color:var(--warn);display:block;margin-top:4px">⚠ '+otherErrors.join('; ')+'</span>';
   fst.innerHTML=html||'<span style="color:var(--warn)">Файлы не загружены</span>';
@@ -611,7 +620,7 @@ async function handleFiles(inp){
 function applyMasloboykaJSON(bundle){
   window._bridgeBundle=bundle;
 
-  // Збираємо content_md з усіх файлів зі статусом ok/partial
+  // Собираем content_md из всех файлов со статусом ok/partial
   var parts=[];
   var fileNames=[];
   var failedNames=[];
@@ -640,7 +649,7 @@ function applyMasloboykaJSON(bundle){
   msg+='\n⚡ Запускаю аналіз...';
   addChatMsg('sys',msg);
 
-  // Запускаємо стандартний Claude pipeline — він заповнить форму
+  // Запускаем стандартный Claude pipeline — он заполнит форму
   parseTZ();
 }
 
@@ -689,7 +698,6 @@ function onTerrChange(){
     var el=document.getElementById('p_margin');
     if(el&&!el.dataset.manuallySet) el.value=TERR_MARGIN[tv];
   }
-  recalc();
 }
 
 // FEW-SHOT
@@ -823,7 +831,7 @@ days=ПОЛЕВЫЕ (не срок договора!). contract_days=срок и
 1. Виписуй дослівні цитати для кожного знайденого параметру: «цитата з документу» → параметр=значення
 2. Якщо параметр відсутній — ставь null/0/false/"". Не екстраполюй, не вигадуй.
 3. Кадастровий номер — тільки якщо знайдений дослівно в тексті.
-CAD PRIORITY: якщо в даних є блок [DWG/DXF], його площа та метрики мають найвищий пріоритет над цифрами текстового ТЗ. Вкажи в special_conditions "CAD: area=X га" якщо є CAD-дані.
+CAD PRIORITY: если в данных есть блок [DWG/DXF], его площадь и метрики имеют наивысший приоритет над цифрами текстового ТЗ. Укажи в special_conditions "CAD: area=X га" если есть CAD-данные.
 Перед JSON — 3-5 рядків цитат і висновків. JSON:
 {"object":"","object_source":"прямо/по заказчику/ориентировочно","dist_km":0,"terrType":"незастр_простой/незастр_сложный/застр_простой/застр_средний/застр_сложный/промзона_простой/промзона_сложный/дендро_парк/дендро_лес","area_ga":0,"length_km":0,"strip_m":50,"days":0,"contract_days":0,"dist_note":"","has_geo":true,"geo_assumed":false,"has_trassa":false,"has_wells":false,"has_razb":false,"has_exec":false,"has_loca":false,"has_bathy":false,"has_static":false,"has_geo_geo":false,"has_eco":false,"has_hydro":false,"has_survey_bld":false,"needs_expertise":false,"coord_system":"","scale":"","norms":[],"drill_count":0,"drill_depth_m":0,"special_conditions":[]}`
 
@@ -854,56 +862,56 @@ var _TAXONOMY_TEXT = "";
 // Helper: get PASS12_SYS with injected taxonomy
 function getPASS12WithTaxonomy(){
   if(!_TAXONOMY_TEXT) return PASS12_SYS;
-  return PASS12_SYS + "\n\n---\n# ТАКСОНОМІЯ ПАРАМЕТРІВ\n\n" + _TAXONOMY_TEXT + "\n\n---\n";
+  return PASS12_SYS + "\n\n---\n# ТАКСОНОМИЯ ПАРАМЕТРОВ\n\n" + _TAXONOMY_TEXT + "\n\n---\n";
 }
 
 // SCREENING_SYS — легкий перший прохід, ~800 токенів
-var SCREENING_SYS=`Ти фільтр скрінінгу ГеоГіс (геодезія, СРО вишукувальників).
-ЗАВДАННЯ: визначити — наш це проект чи ні? НЕ рахуй ціни. НЕ витягуй всі параметри.
+var SCREENING_SYS=`Ты фильтр скрининга ГеоГис (геодезия, СРО изыскателей).
+ЗАДАЧА: определить — наш это проект или нет? НЕ считай цены. НЕ извлекай все параметры.
 
-ТВЕРДІ СТОПИ (автовідхилення, verdict="reject"):
-1. Воєнний/режимний об'єкт: ЗСУ, МО, військова частина, секретний, воєнна база, бойова
-2. Жодної геодезичної роботи: тільки геологія / екологія / гідромет / БТІ / кадастрова реєстрація
+ТВЁРДЫЕ СТОПЫ (автоотклонение, verdict="reject"):
+1. Военный/режимный объект: ВСУ, МО, военная часть, секретный, военная база, боевая
+2. Нет геодезических работ: только геология / экология / гидромет / БТИ / кадастровая регистрация
 
-М'ЯКИЙ ФЛАГ (не відхиляти, dist_flag=true):
-3. Відстань від Москви або від офісу > 1000 км
+МЯГКИЙ ФЛАГ (не отклонять, dist_flag=true):
+3. Расстояние от Москвы или от офиса > 1000 км
 
 АЛГОРИТМ:
-1. Знайди ВСІ згадані види робіт у документі
-2. Класифікуй кожну: НАША (є в геодезичній таксономії нижче) / ЧУЖА / НЕЗРОЗУМІЛО
-3. Перевір стопи
-4. Якщо відстань згадана — витягни dist_km
+1. Найди ВСЕ упомянутые виды работ в документе
+2. Классифицируй каждую: НАША (есть в геодезической таксономии ниже) / ЧУЖАЯ / НЕПОНЯТНО
+3. Проверь стопы
+4. Если расстояние упомянуто — извлеки dist_km
 
-Відповідай ТІЛЬКИ JSON без пояснень:
+Отвечай ТОЛЬКО JSON без объяснений:
 {"verdict":"target|reject|unclear","reject_reasons":[],"works_ours":[],"works_others":[],"works_unclear":[],"dist_km":null,"dist_flag":false,"screening_note":""}
 
-verdict: "target"=наш проект, "reject"=є стоп-фактор, "unclear"=вид робіт не вказано явно`;
+verdict: "target"=наш проект, "reject"=есть стоп-фактор, "unclear"=вид работ не указан явно`;
 
 function getScreeningSys(){
   if(!_TAXONOMY_TEXT) return SCREENING_SYS;
-  return SCREENING_SYS + "\n\n# ТАКСОНОМІЯ (для класифікації НАША/ЧУЖА):\n" + _TAXONOMY_TEXT.slice(0,4000);
+  return SCREENING_SYS + "\n\n# ТАКСОНОМИЯ (для классификации НАША/ЧУЖАЯ):\n" + _TAXONOMY_TEXT.slice(0,4000);
 }
 
 function renderScreeningCard(scr, isReject){
   if(!scr) return;
   var verdictIcon = scr.verdict==='reject' ? '🔴' : scr.verdict==='unclear' ? '🟡' : '🟢';
-  var verdictLabel = scr.verdict==='reject' ? 'ВІДХИЛИТИ' : scr.verdict==='unclear' ? 'УТОЧНИТИ' : 'ЦІЛЬОВИЙ';
+  var verdictLabel = scr.verdict==='reject' ? 'ОТКЛОНИТЬ' : scr.verdict==='unclear' ? 'УТОЧНИТЬ' : 'ЦЕЛЕВОЙ';
   var verdictColor = scr.verdict==='reject' ? '#c0392b' : scr.verdict==='unclear' ? '#e67e22' : '#1a5c35';
 
   var reasonsHtml = (scr.reject_reasons||[]).length
-    ? '<div style="margin-top:8px"><b>Причини:</b><ul style="margin:4px 0 0 14px;padding:0">'+(scr.reject_reasons.map(function(r){return '<li>'+r+'</li>';}).join(''))+'</ul></div>' : '';
+    ? '<div style="margin-top:8px"><b>Причины:</b><ul style="margin:4px 0 0 14px;padding:0">'+(scr.reject_reasons.map(function(r){return '<li>'+r+'</li>';}).join(''))+'</ul></div>' : '';
   var oursHtml = (scr.works_ours||[]).length
-    ? '<div style="margin-top:8px"><b>Наші роботи:</b><br>'+(scr.works_ours.map(function(w){return '<span class="scr-tag ours">'+w+'</span>';}).join(''))+'</div>' : '';
+    ? '<div style="margin-top:8px"><b>Наши работы:</b><br>'+(scr.works_ours.map(function(w){return '<span class="scr-tag ours">'+w+'</span>';}).join(''))+'</div>' : '';
   var othersHtml = (scr.works_others||[]).length
-    ? '<div style="margin-top:6px"><b>Чужі роботи:</b><br>'+(scr.works_others.map(function(w){return '<span class="scr-tag others">'+w+'</span>';}).join(''))+'</div>' : '';
+    ? '<div style="margin-top:6px"><b>Чужие работы:</b><br>'+(scr.works_others.map(function(w){return '<span class="scr-tag others">'+w+'</span>';}).join(''))+'</div>' : '';
   var unclearHtml = (scr.works_unclear||[]).length
-    ? '<div style="margin-top:6px"><b>Незрозуміло:</b><br>'+(scr.works_unclear.map(function(w){return '<span class="scr-tag unclear">'+w+'</span>';}).join(''))+'</div>' : '';
+    ? '<div style="margin-top:6px"><b>Непонятно:</b><br>'+(scr.works_unclear.map(function(w){return '<span class="scr-tag unclear">'+w+'</span>';}).join(''))+'</div>' : '';
   var distHtml = scr.dist_flag
-    ? '<div style="margin-top:8px;padding:6px 10px;background:#fff8e1;border:1px solid #ffe082;border-radius:4px;font-size:12px">⚠️ Відстань '+(scr.dist_km||'> 1000')+' км — вимагає обговорення</div>' : '';
+    ? '<div style="margin-top:8px;padding:6px 10px;background:#fff8e1;border:1px solid #ffe082;border-radius:4px;font-size:12px">⚠️ Расстояние '+(scr.dist_km||'> 1000')+' км — требует обсуждения</div>' : '';
   var noteHtml = scr.screening_note
     ? '<div style="margin-top:8px;font-size:11px;color:var(--muted)">'+scr.screening_note+'</div>' : '';
   var calcBtn = isReject
-    ? '<button class="scr-calc-btn" onclick="window._skipScreening=true;parseTZ()">Все одно підрахувати детально →</button>' : '';
+    ? '<button class="scr-calc-btn" onclick="window._skipScreening=true;parseTZ()">Все равно посчитать подробно →</button>' : '';
 
   var html = '<div class="scr-card" style="border:2px solid '+verdictColor+'">'
     +'<div class="scr-title" style="color:'+verdictColor+'">'+verdictIcon+' '+verdictLabel+'</div>'
@@ -1015,11 +1023,14 @@ function buildAnalysisContent(prefix,rawText,pdfFiles,docxFiles,imgFiles){
   }
 }
 
-async function apiCall(system,content,maxTok,_retry){
+const MDL_SONNET='claude-sonnet-4-20250514';
+const MDL_HAIKU='claude-haiku-4-5-20251001';
+async function apiCall(system,content,maxTok,_retry,model){
   maxTok=maxTok||2000;
+  model=model||MDL_SONNET;
   var doFetch=async function(){
     var resp=await fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxTok,temperature:0,system:system,messages:[{role:'user',content:content}]})});
+      body:JSON.stringify({model:model,max_tokens:maxTok,temperature:0,system:system,messages:[{role:'user',content:content}]})});
     return resp.json();
   };
   var data=await doFetch();
@@ -1037,11 +1048,12 @@ async function apiCall(system,content,maxTok,_retry){
   if(!m){if(!_retry)return apiCall('Отвечай ТОЛЬКО JSON. '+system,content,maxTok,true);throw new Error('Нет JSON');}
   try{return JSON.parse(m[0]);}catch(e){throw new Error('JSON parse: '+e.message);}
 }
-async function apiCallText(system,content,maxTok){
+async function apiCallText(system,content,maxTok,model){
   maxTok=maxTok||3000;
+  model=model||MDL_SONNET;
   var doFetch=async function(){
     var resp=await fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxTok,temperature:0,system:system,messages:[{role:'user',content:content}]})});
+      body:JSON.stringify({model:model,max_tokens:maxTok,temperature:0,system:system,messages:[{role:'user',content:content}]})});
     return resp.json();
   };
   var data=await doFetch();
@@ -1079,14 +1091,14 @@ async function parseTZ(){
       var _scrPdf=_files.filter(function(f){return f.type==='pdf';});
       var _scrDocx=_files.filter(function(f){return f.type==='docx';});
       var _scrImg=_files.filter(function(f){return f.type==='image';});
-      var _scr=await apiCall(getScreeningSys(),buildAnalysisContent('',rawText,_scrPdf,_scrDocx,_scrImg),800);
+      var _scr=await apiCall(getScreeningSys(),buildAnalysisContent('',rawText,_scrPdf,_scrDocx,_scrImg),800,null,MDL_HAIKU);
       window._lastScreening=_scr;
       if(_scr&&_scr.verdict==='reject'){
         renderScreeningCard(_scr,true);
         btn.disabled=false;st.innerHTML='';_parsing=false;return;
       }
       if(_scr&&(_scr.verdict==='unclear'||_scr.dist_flag)){
-        var _scrNote=(_scr.verdict==='unclear'?'🟡 Вид робіт не вказано — розраховуємо як топозйомку 1:500. ':'')+(_scr.dist_flag?'⚠️ Відстань '+(_scr.dist_km||'> 1000')+' км.':'');
+        var _scrNote=(_scr.verdict==='unclear'?'🟡 Вид работ не указан — рассчитываем как топосъемку 1:500. ':'')+(_scr.dist_flag?'⚠️ Расстояние '+(_scr.dist_km||'> 1000')+' км.':'');
         st.innerHTML=_scrNote+'<span class="spinner" style="margin-left:6px"></span>';
         window._pendingScreeningHtml=null;
         renderScreeningCard(_scr,false);
@@ -1126,7 +1138,7 @@ async function parseTZ(){
     var needsP0=hasPdf||(rawText.length>3000)||docxFiles.length>0;
     if(needsP0){
       st.innerHTML='<span class="spinner"></span> Нормализация документа...';
-      p0text=await apiCallText(PASS0_SYS,buildAnalysisContent('ПРОЧИТАЙ ВЕСЬ ДОКУМЕНТ:',rawText,pdfFiles,docxFiles,imgFiles),3000).catch(function(){return '';});
+      p0text=await apiCallText(PASS0_SYS,buildAnalysisContent('ПРОЧИТАЙ ВЕСЬ ДОКУМЕНТ:',rawText,pdfFiles,docxFiles,imgFiles),3000,MDL_HAIKU).catch(function(){return '';});
     }
     var normPfx=p0text?'=== АНАЛИЗ ДОКУМЕНТА ===\n'+p0text+'\n\n=== ДОКУМЕНТ ===\n':'';
 
@@ -1140,7 +1152,7 @@ async function parseTZ(){
     var geoNote=p12.geo_assumed?'ВИД РАБОТ НЕ УКАЗАН. Расчёт для топосъёмки 1:500.\n':'';
     var p3pfx=normPfx+geoNote+'Объект: '+(p12.object||'?')+'\nРасст: '+(p12.dist_km||0)+' км, тип: '+(p12.terrType||'?')+', га: '+(p12.area_ga||'?')+'\nГеодезия: гео='+p12.has_geo+', трасса='+p12.has_trassa+', geo_assumed='+p12.geo_assumed+'\nПередать коллегам: '+(col||'нет')+'\n'+fewShot+'\n';
     var results=await Promise.all([
-      apiCall(PASS3A_SYS,buildAnalysisContent(p3pfx,rawText,pdfFiles,docxFiles,imgFiles),2500),
+      apiCall(PASS3A_SYS,buildAnalysisContent(p3pfx,rawText,pdfFiles,docxFiles,imgFiles),2500,null,MDL_HAIKU),
       apiCall(PASS3B_SYS,buildAnalysisContent(p3pfx,rawText,pdfFiles,docxFiles,imgFiles),4000)
     ]);
     var p3=Object.assign({},results[0],results[1]);
@@ -1150,7 +1162,7 @@ async function parseTZ(){
     var needsVerify=!p12.object||!p12.area_ga||!p12.terrType||p12.days===0;
     if(needsVerify){
       st.innerHTML='<span class="spinner"></span> Верификация (пробелы)...';
-      verify=await apiCall(VERIFY_SYS,buildAnalysisContent('ИЗВЛЕЧЕНО:\n'+JSON.stringify(Object.assign({},p12,p3))+'\nПРОВЕРЬ:\n',rawText,pdfFiles,docxFiles,imgFiles),2500);
+      verify=await apiCall(VERIFY_SYS,buildAnalysisContent('ИЗВЛЕЧЕНО:\n'+JSON.stringify(Object.assign({},p12,p3))+'\nПРОВЕРЬ:\n',rawText,pdfFiles,docxFiles,imgFiles),2500,null,MDL_HAIKU);
     }
 
     var p=Object.assign({},p12,p3,{_verify:verify,_visual:visualData,_p0:p0text});
@@ -1328,7 +1340,7 @@ async function runUnmatchedSearch(works){
   var el=document.getElementById('unmatchedDetail');
   if(el) el.innerHTML='<div class="unm-status"><span class="spinner"></span><span>Ищу информацию: '+works.join(', ')+'...</span><button class="unm-cancel" onclick="cancelUnmatched()">✕</button></div>';
   var SYS="Для каждой работы дай краткий анализ: что это, нужны ли лицензии/СРО, спецтехника, стоимость в РФ 2025-2026. Кратко.";
-  var fetchP=fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,temperature:0,system:SYS,tools:[{type:'web_search_20250305',name:'web_search'}],messages:[{role:'user',content:'Проанализируй: '+works.join('; ')}]})});
+  var fetchP=fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:MDL_HAIKU,max_tokens:1000,temperature:0,system:SYS,tools:[{type:'web_search_20250305',name:'web_search'}],messages:[{role:'user',content:'Проанализируй: '+works.join('; ')}]})});
   var timeoutP=new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),35000));
   try{
     var resp=await Promise.race([fetchP,timeoutP]);
@@ -1462,6 +1474,87 @@ buildRatesUI();
   renderResult(_snap);
 }
 
+// ВЕРСИИ РАСЧЁТА
+var _versionParams=['p_area','p_len','p_dist','p_days','p_crew','p_accom','p_margin','p_coef','p_trassa','p_groN','p_bathy','p_static','p_wells','p_terr','p_strip','p_gro','p_groN','p_pvo','p_loca'];
+function saveVersion(){
+  var domVals={};
+  _versionParams.forEach(function(k){var el=document.getElementById(k);if(el)domVals[k]=el.type==='checkbox'?el.checked:el.value;});
+  if(!_snap.kp)return;
+  var num=_versions.length+1;
+  _versions.push({
+    num:num,
+    label:'v'+num,
+    ts:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),
+    kp:_snap.kp, kpNds:_snap.kpNds, margin:_snap.margin, days:_snap.days,
+    domVals:domVals
+  });
+  recalc();
+  addChatMsg('sys','💾 Версия v'+num+' сохранена (КП: '+fmt(_snap.kp)+'₽)');
+}
+function restoreVersion(idx){
+  var v=_versions[idx];if(!v)return;
+  _versionParams.forEach(function(k){
+    var el=document.getElementById(k);
+    if(!el||v.domVals[k]===undefined)return;
+    el.type==='checkbox'?el.checked=v.domVals[k]:el.value=v.domVals[k];
+  });
+  window._snapBeforeChat=Object.assign({},_snap);
+  recalc();
+  addChatMsg('sys','↩ Восстановлена '+v.label+' · КП: '+fmt(v.kp)+'₽');
+}
+
+// COPY COORDINATES
+function copyCoords(){
+  var field=document.getElementById('coordField');
+  if(!field||!field.value)return;
+  navigator.clipboard.writeText(field.value).then(function(){
+    var btn=event.target;
+    var originalText=btn.textContent;
+    btn.textContent='✓ Скопировано';
+    btn.style.background='#e8f5e8';
+    btn.style.borderColor='#4a9a5a';
+    btn.style.color='#1a4020';
+    setTimeout(function(){
+      btn.textContent=originalText;
+      btn.style.background='#f0faf4';
+      btn.style.borderColor='#b0d8b8';
+      btn.style.color='#16a349';
+    },1500);
+  });
+}
+
+// STAGED CALCULATION (пошаговый расчет с проверкой 35-сек лимита)
+function calcBtn_Stage(){
+  var btn=document.getElementById('calcBtn');
+  var originalText=btn.textContent;
+  btn.disabled=true;
+  btn.style.opacity='0.6';
+  btn.textContent='⏳ Рассчитываю...';
+
+  setTimeout(function(){
+    try{
+      recalc();
+      btn.textContent='✓ Готово';
+      btn.style.background='var(--ok)';
+      setTimeout(function(){
+        btn.textContent=originalText;
+        btn.style.background='var(--accent)';
+        btn.disabled=false;
+        btn.style.opacity='1';
+      },1500);
+    }catch(e){
+      btn.textContent='⚠ Ошибка';
+      btn.style.background='var(--red)';
+      setTimeout(function(){
+        btn.textContent=originalText;
+        btn.style.background='var(--accent)';
+        btn.disabled=false;
+        btn.style.opacity='1';
+      },2000);
+    }
+  },100);
+}
+
 // RENDER RESULT
 function renderResult({lines,notIn,total,kp,kpNds,kpMin,kpMax,profit,margin,days,dist,tollCost}){
   document.getElementById('emptyState').style.display='none';
@@ -1577,8 +1670,40 @@ function renderResult({lines,notIn,total,kp,kpNds,kpMin,kpMax,profit,margin,days
   });
   notIn.forEach(w=>rows+='<tr class="notcalc"><td>⊘ '+w+'</td><td style="color:#8a3010">не рассчитано</td></tr>');
   var tollNote=tollCost>0?'<div style="padding:8px 14px;font-size:12px;color:var(--muted);border-top:1px solid var(--border)">🛣 Платные дороги: ~'+fmt(Math.round(tollCost/100)*100)+' ₽</div>':'';
+  // Дельта КП после пересчёта из чата
+  var deltaHtml='';
+  if(window._snapBeforeChat&&window._snapBeforeChat.kp&&window._snapBeforeChat.kp!==kp){
+    var prevKp=window._snapBeforeChat.kp;
+    var prevKpNds=window._snapBeforeChat.kpNds;
+    var diffPct=Math.round(((kp-prevKp)/prevKp)*100);
+    var diffSign=diffPct>0?'+':'';
+    var diffColor=diffPct>0?'#8a3010':'#1a4020';
+    deltaHtml='<div style="margin-bottom:10px;padding:8px 12px;background:#fdf8e0;border:1px solid #d0b840;border-radius:4px;font-family:monospace;font-size:12px">'
+      +'<b>Пересчёт из чата:</b> '
+      +'<span style="text-decoration:line-through;color:#888">'+fmt(prevKp)+'₽</span>'
+      +' → <b>'+fmt(kp)+'₽</b>'
+      +' <span style="color:'+diffColor+';font-weight:600">'+diffSign+diffPct+'%</span>'
+      +(prevKpNds?' &nbsp;|&nbsp; с НДС: <span style="text-decoration:line-through;color:#888">'+fmt(prevKpNds)+'₽</span> → <b>'+fmt(kpNds)+'₽</b>':'')
+      +'</div>';
+  }
   var costHtml='';
-  if(total>0) costHtml='<div class="card"><div class="ch2 ok-h">📐 Геодезия — смета и цена КП</div><table class="ct">'+rows+'<tr class="sub"><td>Итого прямые затраты</td><td>'+fmt(total)+' ₽</td></tr><tr class="mgn"><td>Маржа ('+margin+'%)</td><td>+ '+fmt(profit)+' ₽</td></tr><tr class="tot"><td>Цена Геодезия (без НДС)</td><td>'+fmt(kp)+' ₽</td></tr><tr class="tot2"><td>Цена Геодезия (с НДС 20%)</td><td>'+fmt(kpNds)+' ₽</td></tr><tr class="rng"><td>Диапазон ±</td><td>'+fmt(kpMin)+' – '+fmt(kpMax)+' ₽</td></tr></table>'+tollNote+(notIn.length?'<div style="padding:8px 14px;font-size:12px;color:var(--warn);border-top:1px solid var(--border)">⚠ Красные строки не включены в итог.</div>':'')+'</div>';
+  // История версий
+  var versionsHtml='';
+  if(_versions.length>0){
+    var vRows=_versions.map(function(v,i){
+      var cur=v.kp===kp;
+      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f0ede8;font-size:12px">'
+        +'<span style="font-family:monospace;font-size:10px;color:#bbb;width:34px;flex-shrink:0">'+v.ts+'</span>'
+        +'<span style="font-family:monospace;font-weight:'+(cur?'700':'400')+';flex:1;color:'+(cur?'var(--accent)':'var(--text)')+'">'+v.label+'</span>'
+        +'<span style="font-family:monospace;color:'+(cur?'var(--accent)':'#888')+'">'+fmt(v.kp)+'₽</span>'
+        +(cur?'<span style="font-size:10px;color:var(--accent);font-family:monospace">← сейчас</span>'
+             :'<button onclick="restoreVersion('+i+')" style="padding:2px 8px;border:1px solid var(--border);border-radius:3px;font-size:10px;font-family:monospace;cursor:pointer;background:transparent;color:var(--accent)">↩</button>')
+        +'</div>';
+    }).join('');
+    versionsHtml='<div class="card" style="margin-bottom:10px"><div class="ch2" style="display:flex;justify-content:space-between;align-items:center"><span>📊 Версии расчёта</span><span style="font-size:10px;color:var(--muted);font-family:monospace">'+_versions.length+' сохранено</span></div><div class="cb2" style="padding:4px 14px">'+vRows+'</div></div>';
+  }
+  var saveVerBtn=total>0?'<div style="padding:6px 14px 10px;border-top:1px solid var(--border)"><button onclick="saveVersion()" style="padding:4px 12px;border:1px solid var(--border);border-radius:3px;font-family:monospace;font-size:11px;cursor:pointer;background:transparent;color:var(--muted)">💾 Сохранить версию</button></div>':'';
+  if(total>0) costHtml='<div class="card">'+deltaHtml+'<div class="ch2 ok-h">📐 Геодезия — смета и цена КП</div><table class="ct">'+rows+'<tr class="sub"><td>Итого прямые затраты</td><td>'+fmt(total)+' ₽</td></tr><tr class="mgn"><td>Маржа ('+margin+'%)</td><td>+ '+fmt(profit)+' ₽</td></tr><tr class="tot"><td>Цена Геодезия (без НДС)</td><td>'+fmt(kp)+' ₽</td></tr><tr class="tot2"><td>Цена Геодезия (с НДС 20%)</td><td>'+fmt(kpNds)+' ₽</td></tr><tr class="rng"><td>Диапазон ±</td><td>'+fmt(kpMin)+' – '+fmt(kpMax)+' ₽</td></tr></table>'+tollNote+(notIn.length?'<div style="padding:8px 14px;font-size:12px;color:var(--warn);border-top:1px solid var(--border)">⚠ Красные строки не включены в итог.</div>':'')+saveVerBtn+'</div>';
 
   // Risks
   var rHtml='';
@@ -1593,10 +1718,11 @@ function renderResult({lines,notIn,total,kp,kpNds,kpMin,kpMax,profit,margin,days
     +'<div style="background:#fff;border:1px solid #e8e6e0;border-radius:8px;padding:12px"><div style="font-size:10px;color:#aaa;font-family:monospace;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Дней</div><div style="font-size:19px;font-weight:600;font-family:monospace">'+_snap.days+'</div><div style="font-size:10px;color:#bbb;margin-top:2px">бригада '+crew2+' чел.</div></div>'
     +'</div>':'';
   var addrV=document.getElementById('p_object').value||ai.object||'';
-  var addrH=addrV?'<div style="background:#fff;border:1px solid #e8e6e0;border-radius:8px;padding:12px 14px;margin-bottom:14px"><div style="font-size:10px;color:#aaa;font-family:monospace;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Объект</div><div style="font-size:14px;font-weight:500;margin-bottom:5px">'+addrV+'</div>'+(document.getElementById('p_dist').value?'<div style="font-size:11px;color:#888;margin-bottom:7px">'+document.getElementById('p_dist').value+' км от МКАД</div>':'')+'<div style="display:flex;gap:6px;flex-wrap:wrap"><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://yandex.ru/maps/?text='+encodeURIComponent(addrV)+'" target="_blank">Яндекс.Карты</a><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://maps.google.com/?q='+encodeURIComponent(addrV)+'" target="_blank">Google Maps</a><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://2gis.ru/search/'+encodeURIComponent(addrV)+'" target="_blank">2ГИС</a>'+(window._kadNum?'<a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="'+window._kadUrl+'" target="_blank">📍 КПК '+window._kadNum+'</a>':'')+'</div></div>':'';
+  var coordField='<div style="margin-top:10px;padding-top:10px;border-top:1px solid #e8e6e0"><div style="display:flex;gap:6px;align-items:center"><input type="text" id="coordField" placeholder="Координаты из карты (широта,долгота)" style="flex:1;padding:6px 9px;border:1px solid #d8d5d0;border-radius:3px;font-family:monospace;font-size:11px;background:#fafaf8;outline:none" readonly><button onclick="copyCoords()" style="padding:4px 10px;border:1px solid #b0d8b8;border-radius:3px;background:#f0faf4;color:#16a349;font-family:monospace;font-size:10px;cursor:pointer;white-space:nowrap">⎘ Копировать</button></div></div>';
+  var addrH=addrV?'<div style="background:#fff;border:1px solid #e8e6e0;border-radius:8px;padding:12px 14px;margin-bottom:14px"><div style="font-size:10px;color:#aaa;font-family:monospace;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Объект</div><div style="font-size:14px;font-weight:500;margin-bottom:5px">'+addrV+'</div>'+(document.getElementById('p_dist').value?'<div style="font-size:11px;color:#888;margin-bottom:7px">'+document.getElementById('p_dist').value+' км от МКАД</div>':'')+'<div style="display:flex;gap:6px;flex-wrap:wrap"><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://yandex.ru/maps/?text='+encodeURIComponent(addrV)+'" target="_blank">Яндекс.Карты</a><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://maps.google.com/?q='+encodeURIComponent(addrV)+'" target="_blank">Google Maps</a><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://2gis.ru/search/'+encodeURIComponent(addrV)+'" target="_blank">2ГИС</a>'+(window._kadNum?'<a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="'+window._kadUrl+'" target="_blank">📍 КПК '+window._kadNum+'</a>':'')+'</div>'+coordField+'</div>':'';
   var expertHtml=_snap.kp>0?'<div style="margin:10px 0"><button id="expertCheckBtn" onclick="runExpertCheck()" style="padding:8px 16px;border:1.5px solid var(--accent);border-radius:4px;background:transparent;font-family:monospace;font-size:12px;color:var(--accent);cursor:pointer">🔍 Экспертная проверка расчёта</button></div>':'';
 
-  ra.innerHTML=kpiH+addrH+vHtml+visualHtml+ubHtml+salesHtml+clHtml+winHtml+taskHtml+unmHtml+costHtml+expertHtml+rHtml;
+  ra.innerHTML=kpiH+addrH+vHtml+visualHtml+ubHtml+salesHtml+clHtml+winHtml+taskHtml+unmHtml+versionsHtml+costHtml+expertHtml+rHtml;
   if(notIn.length) runUnmatchedSearch(notIn);
 }
 
@@ -1665,12 +1791,27 @@ function buildChatSystem(){
   if(ai.risks&&ai.risks.length) params+='\nРиски: '+ai.risks.join('; ');
   // Вердикт
   if(ai.verdict) params+='\nВердикт: '+ai.verdict.toUpperCase()+' — '+( ai.verdict_reason||'');
+  // Текущие значения параметров из DOM (то что реально стоит в полях)
+  var domParams='\n\nТЕКУЩИЕ ЗНАЧЕНИЯ ПАРАМЕТРОВ (именно эти применены в расчёте):';
+  var domMap={p_area:'Площадь га',p_len:'Трасса км',p_dist:'Расстояние от МКАД км',p_days:'Полевых дней',p_crew:'Бригада чел',p_accom:'Проживание ₽/ночь',p_margin:'Маржа %',p_coef:'Коэффициент',p_trassa:'Трассировка га',p_groN:'Пунктов ГРО',p_bathy:'Батиметрия га',p_static:'Точек статики'};
+  Object.keys(domMap).forEach(function(id){var el=document.getElementById(id);if(el&&el.value&&el.value!=='0')domParams+='\n  '+domMap[id]+': '+el.value;});
+  var wellsEl=document.getElementById('p_wells');if(wellsEl&&wellsEl.value!=='0')domParams+='\n  Вскрытие колодцев: '+((wellsEl.options[wellsEl.selectedIndex]||{}).text||wellsEl.value);
+  var locaEl=document.getElementById('p_loca');if(locaEl&&locaEl.checked)domParams+='\n  Локализация: да';
   // Текущий расчёт
   var calc='';
-  if(snap.kp) calc='\n\nТЕКУЩИЙ РАСЧЁТ:'
+  if(snap.kp) calc='\n\nРЕЗУЛЬТАТ РАСЧЁТА:'
     +'\nКП без НДС: '+fmt(snap.kp)+'₽ | с НДС: '+fmt(snap.kpNds)+'₽'
     +'\nМаржа: '+snap.margin+'% | Затраты: '+fmt(snap.total)+'₽'
     +'\nПолевых дней: '+snap.days;
+  // История изменений из чата
+  var histStr='';
+  if(_recalcHistory&&_recalcHistory.length){
+    var chatChanges=_recalcHistory.filter(function(h){return h.source==='chat';}).slice(-5);
+    if(chatChanges.length){
+      histStr='\n\nИСТОРИЯ ИЗМЕНЕНИЙ (последние из чата):';
+      chatChanges.forEach(function(h){histStr+='\n  '+h.param+' → '+h.val+(h.kp_bylo?' (КП было '+fmt(h.kp_bylo)+'₽)':'');});
+    }
+  }
   // Анализ документа
   var p0=ai._p0?'\n\nЧТО В ДОКУМЕНТАХ (автоматический анализ):\n'+ai._p0.substring(0,2000):'';
   // Визуальный анализ
@@ -1704,20 +1845,38 @@ function buildChatSystem(){
     if(bs.failed_files&&bs.failed_files.length)
       bundleCtx+='\nНе оброблені: '+bs.failed_files.join(', ');
   }
-  return 'Ты ассистент оценщика ГеоГис. ВАЖНО: у тебя ЕСТЬ полный контекст загруженных файлов и результатов анализа.\nФИКСИРОВАНО В СИСТЕМЕ: НДС = 22% с 01.01.2026 (ФЗ №425-ФЗ от 28.11.2025).. Не меняй и не обсуждай ставку НДС — она задана системой.'
+  return 'Ты ассистент оценщика ГеоГис. ВАЖНО: у тебя ЕСТЬ полный контекст загруженных файлов и результатов анализа.\nФИКСИРОВАНО В СИСТЕМЕ: НДС = 22% с 01.01.2026 (ФЗ №425-ФЗ от 28.11.2025). Не меняй и не обсуждай ставку НДС — она задана системой.'
     +'\nТЫ ПОМНИШЬ что было в документах. Отвечай конкретно по данному объекту.'
-    +'\n\nКОНТЕКСТ ОЦЕНКИ:'+filesStr+params+calc+vis+p0+docxCtx+bundleCtx
-    +'\n\nЕсли нужно изменить параметры — верни JSON:'
-    +'\n{"p_days":null,"p_dist":null,"p_area":null,"p_margin":null,"p_coef":null,"p_accom":null,"comment":"ответ"}'
-    +'\nПРАВИЛА РАБОТЫ С ПАРАМЕТРАМИ:'
-    +'\n1. Когда нужно изменить расчёт — СРАЗУ верни JSON без лишних вопросов. Система применит автоматически.'
-    +'\n2. JSON должен быть в КОНЦЕ ответа, после текста объяснения.'
-    +'\n3. Нулевые (null) параметры система пропускает — ставь null для параметров которые не меняешь.'
-    +'\n4. p_coef — это коэффициент сложности (1.0-2.3), НЕ множитель площади.'
-    +'\n5. Если изменения не применились — скажи пользователю изменить параметр вручную в левой панели.'
-    +'\n6. НДС = 22% зафиксировано системой. Не обсуждай ставку НДС.'
-    +'\n7. НЕ показывай JSON пользователю — он видит только твой текст и результат пересчёта.'
-    +'\nНЕ включай p_trassa в JSON.';
+    +'\n\nКОНТЕКСТ ОЦЕНКИ:'+filesStr+params+domParams+calc+histStr+vis+p0+docxCtx+bundleCtx
+    +'\n\n=== СИСТЕМА ПЕРЕСЧЁТА ПАРАМЕТРОВ ==='
+    +'\nПОЛЬЗОВАТЕЛЬ ПИШЕТ В СВОБОДНОЙ ФОРМЕ → ТЫ ИНТЕРПРЕТИРУЕШЬ И ВЫДАЁШЬ JSON'
+    +'\nВАЖНО: Используй "ТЕКУЩИЕ ЗНАЧЕНИЯ ПАРАМЕТРОВ" выше как базу — пересчитывай от них, не угадывай значения.'
+    +'\n\nКОГДА ПРИМЕНЯТЬ СРАЗУ (без вопросов):'
+    +'\n• Конкретные числа: "полевые дни 3", "маржа 90%", "коэффициент 1.8"'
+    +'\n• Явные операции: "добавь трассировку", "включи согласования", "увеличь на X"'
+    +'\n• Перечень работ: "добавь ГРО 4 пункта, вскрытие промзона, 9 скважин"'
+    +'\n• "пересчитай с учётом X" — найди параметры и примени'
+    +'\n\nКОГДА ЗАДАТЬ ОДИН УТОЧНЯЮЩИЙ ВОПРОС (и предложить вариант по умолчанию):'
+    +'\n• Запрос неоднозначен: "сложный объект" → спроси: охранные зоны? ОКН? РЖД? — и скажи что применишь коэф.1.6 по умолчанию'
+    +'\n• Неизвестна площадь трассировки: "есть коммуникации" → спроси сколько га, по умолчанию применишь 50% от площади'
+    +'\n• Противоречие с документами: площадь в ТЗ 5 га, но юзер говорит 2 га — уточни'
+    +'\n\nПРИМЕРЫ ПРЕОБРАЗОВАНИЯ (используй текущие значения как базу):'
+    +'\n• "добавь согласования" → p_accom: текущее+20000, p_days: текущее+1'
+    +'\n• "сложный объект, охранные зоны" → p_coef: 1.8, p_days: текущее+1, p_accom: текущее+15000'
+    +'\n• "включи трассировку" → p_trassa: текущая_площадь*0.5 (или 1.0 если площадь мала)'
+    +'\n• "9 скважин" → p_groN: 9'
+    +'\n• "промзона с коммуникациями" → p_terr: 2500, p_trassa: площадь*0.4'
+    +'\n\nДОСТУПНЫЕ ПАРАМЕТРЫ (ставь null если не меняешь):'
+    +'\n{"p_days":null,"p_dist":null,"p_area":null,"p_margin":null,"p_coef":null,"p_accom":null,"p_crew":null,"p_terr":null,"p_len":null,"p_trassa":null,"p_wells":null,"p_groN":null,"p_bathy":null,"p_static":null,"p_loca":null,"comment":"что изменено и почему"}'
+    +'\n\n• p_days — полевые дни, p_dist — км от МКАД, p_area — площадь га, p_margin — маржа %, p_coef — коэф.сложности (1.0–2.3)'
+    +'\n• p_accom — проживание ₽/ночь, p_crew — бригада чел, p_trassa — га трассировки'
+    +'\n• p_wells — вскрытие (0/150/2750/8000), p_groN — пунктов ГРО, p_loca — локализация (true/false)'
+    +'\n• p_terr — (630=простой,840=сложн,1250=застр.прост,1620=застр.RTK,1740=застр.сложн,1670=промзона,2500=промзона.сложн,1950=дендро,2500d=лес)'
+    +'\n\nПРАВИЛА ВЫВОДА:'
+    +'\n1. JSON — ВСЕГДА последним в ответе, после объяснения.'
+    +'\n2. comment — одна фраза: что изменил и почему.'
+    +'\n3. НЕ показывай JSON пользователю — он видит только текст и результат пересчёта.'
+    +'\n4. Если только отвечаешь на вопрос (не меняешь параметры) — JSON не нужен.';
 }
 // Кадастровый номер — ссылка + поиск через Claude web_search
 function showCadastralLink(kadNum){
@@ -1768,7 +1927,7 @@ async function lookupCadastralViaClaude(kadNum){
     var prompt='Найди в открытых источниках данные земельного участка с кадастровым номером '+kadNum+'. Выдай ТОЛЬКО JSON без пояснений: {"address":"","area_ga":0,"category":"","status":""}. Если не нашёл — {"address":"не найдено","area_ga":0,"category":"","status":""}';
     var resp=await fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
+        model:MDL_HAIKU,
         max_tokens:300,
         temperature:0,
         tools:[{type:'web_search_20250305',name:'web_search'}],
@@ -1826,7 +1985,10 @@ async function sendChat(){
   _chat.push({role:'user',content:msgContent});
   _chatTs.push({role:'user',ts:ts,msg:msg||'[изображение]'});
   try{
-    var resp=await fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:6000,temperature:0,system:buildChatSystem(),messages:_chat})});
+    // Sonnet если запрос на пересчёт/изменение, иначе Haiku для экономии
+    var recalcKw=/пересчита|добавь|измени|увеличь|уменьши|включи|выключи|скорректируй|обнови|сделай|поставь|установи|согласован|коэффициент|полевых дней|маржа|трассировк|бюджет|скважин|промзон|охранн/i;
+    var chatModel=recalcKw.test(msg||'')?MDL_SONNET:MDL_HAIKU;
+    var resp=await fetch(PROXY,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:chatModel,max_tokens:chatModel===MDL_SONNET?4000:1500,temperature:0,system:buildChatSystem(),messages:_chat})});
     var data=await resp.json();
     var raw=(data.content?.[0]?.text||'').trim();
     // Логируем токены для контроля затрат
@@ -1839,35 +2001,53 @@ async function sendChat(){
     if(window._analysisDirty) setTimeout(function(){saveFullLog(true);},1500);
     var parsed=null;
     try{
-      // Ищем JSON в любом месте ответа (даже если модель написала текст до него)
-      var jsonMatch=raw.match(/\{[\s\S]*?\}/);
-      if(jsonMatch){
-        var candidate=JSON.parse(jsonMatch[0]);
-        // Проверяем что это параметры расчёта (не случайный JSON)
-        var paramKeys=['p_days','p_dist','p_area','p_margin','p_coef','p_accom'];
-        var hasParam=paramKeys.some(function(k){return k in candidate;});
-        if(hasParam) parsed=candidate;
+      // Ищем ПОСЛЕДНИЙ JSON в ответе который содержит параметры расчёта
+      var allJson=[],rx=/\{[^{}]*\}/g,jm;
+      while((jm=rx.exec(raw))!==null) allJson.push(jm[0]);
+      // Также пробуем вложенный JSON (один блок на весь ответ)
+      var nested=raw.match(/\{[\s\S]*\}/);
+      if(nested) allJson.push(nested[0]);
+      var paramKeys=['p_days','p_dist','p_area','p_margin','p_coef','p_accom','p_crew','p_terr','p_len','p_trassa','p_wells','p_groN','p_bathy','p_static','p_loca'];
+      for(var ji=allJson.length-1;ji>=0;ji--){
+        try{var c=JSON.parse(allJson[ji]);if(paramKeys.some(function(k){return k in c;})){parsed=c;break;}}catch(e){}
       }
     }catch(e){}
     if(parsed){
-      var safeParams=['p_days','p_dist','p_area','p_margin','p_coef','p_accom'];
+      window._snapBeforeChat=Object.assign({},_snap); // для дельты на правой панели
+      var safeParams=['p_days','p_dist','p_area','p_margin','p_coef','p_accom','p_crew','p_terr','p_len','p_strip','p_trassa','p_wells','p_gro','p_groN','p_pvo','p_bathy','p_static','p_loca'];
       var kpBefore=_snap.kp||0;
+      var paramLabels={p_days:'полевые дни',p_dist:'расстояние',p_area:'площадь',p_margin:'маржа',p_coef:'коэффициент',p_accom:'проживание',p_crew:'бригада',p_terr:'тип территории',p_len:'трасса',p_strip:'полоса',p_trassa:'трассировка',p_wells:'вскрытие колодцев',p_gro:'ГРО',p_groN:'пункты ГРО',p_pvo:'точки ПВО',p_bathy:'батиметрия',p_static:'статика',p_loca:'локализация'};
+      // Запоминаем старые значения ДО применения
+      var oldVals={};
+      safeParams.forEach(function(k){var el=document.getElementById(k);if(el)oldVals[k]=el.type==='checkbox'?el.checked:el.value;});
+      // Применяем новые значения
       safeParams.forEach(function(k){
         if(parsed[k]===null||parsed[k]===undefined)return;
         var el=document.getElementById(k);if(!el)return;
-        var oldVal=el.value;
         el.type==='checkbox'?el.checked=parsed[k]:el.value=parsed[k];
-        if(oldVal!==String(parsed[k])) _recalcHistory.push({ts:new Date().toISOString(),param:k,val:parsed[k],kp_bylo:kpBefore,kp_stalo:0,source:'chat'});
+        if(oldVals[k]!==String(parsed[k])&&oldVals[k]!==parsed[k]) _recalcHistory.push({ts:new Date().toISOString(),param:k,val:parsed[k],kp_bylo:kpBefore,kp_stalo:0,source:'chat'});
       });
-      // Собираем что изменилось
-      var changed=[];
-      var paramLabels={p_days:'полевые дни',p_dist:'расстояние',p_area:'площадь га',p_margin:'маржа %',p_coef:'коэффициент',p_accom:'проживание'};
-      safeParams.forEach(function(k){if(parsed[k]!==null&&parsed[k]!==undefined) changed.push(paramLabels[k]+': '+parsed[k]);});
+      // Формируем детальный diff
+      var diffLines=[];
+      safeParams.forEach(function(k){
+        if(parsed[k]===null||parsed[k]===undefined)return;
+        var oldV=oldVals[k];
+        var newV=parsed[k];
+        if(String(oldV)===String(newV)||oldV===newV)return;
+        var lbl=paramLabels[k]||k;
+        if(oldV&&oldV!=='0'&&oldV!==false) diffLines.push(lbl+': '+oldV+' → '+newV);
+        else diffLines.push(lbl+': '+newV);
+      });
       var commentText=parsed.comment?parsed.comment.replace(/```json[\s\S]*?```/g,'').trim():'';
-      var changeNote=changed.length?'\n✓ Применено: '+changed.join(', '):'';
-      addChatMsg('ai',(commentText||'Параметры обновлены')+changeNote);
       recalc();
-      setTimeout(function(){if(_recalcHistory.length>0&&_recalcHistory[_recalcHistory.length-1].kp_stalo===0)_recalcHistory[_recalcHistory.length-1].kp_stalo=_snap.kp||0;},400);
+      // Показываем diff с КП до/после
+      setTimeout(function(){
+        var kpAfter=_snap.kp||0;
+        var kpDiff=kpBefore&&kpAfter&&kpBefore!==kpAfter?' | КП: '+fmt(kpBefore)+'→'+fmt(kpAfter)+'₽ ('+(kpAfter>kpBefore?'+':'')+Math.round((kpAfter-kpBefore)/kpBefore*100)+'%)':'';
+        var diffNote=diffLines.length?'\n✓ '+diffLines.join(' · ')+kpDiff:'';
+        addChatMsg('ai',(commentText||'Параметры обновлены')+diffNote);
+        if(_recalcHistory.length>0&&_recalcHistory[_recalcHistory.length-1].kp_stalo===0)_recalcHistory[_recalcHistory.length-1].kp_stalo=kpAfter;
+      },200);
     } else {
       // Скрываем технический JSON из отображения
       var display=raw.replace(/```json[\s\S]*?```/g,'').replace(/\{[\s\S]*?"comment"[\s\S]*?\}/g,'').trim();
