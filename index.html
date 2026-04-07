@@ -832,8 +832,15 @@ days=ПОЛЕВЫЕ (не срок договора!). contract_days=срок и
 2. Если параметр отсутствует — ставь null/0/false/"". Не экстраполируй, не придумывай.
 3. Кадастровый номер — только если найден дословно в тексте.
 CAD PRIORITY: если в данных есть блок [DWG/DXF], его площадь и метрики имеют наивысший приоритет над цифрами текстового ТЗ. Укажи в special_conditions "CAD: area=X га" если есть CAD-данные.
+РЕЕСТР ВХОДЯЩИХ ДОКУМЕНТОВ (document_registry):
+- documents[]: для каждого файла укажи name (имя файла как есть) и type (что это по содержанию: "Проект договора" / "Техническое задание" / "Топоплан" / "Кадастровая выписка" / "Письмо/запрос" / "Паспорт объекта" / "Схема расположения" / "Акт" / "Иное: ..." — определяй по содержимому, не по названию файла)
+- required_works[]: ТОЛЬКО явно прописанные в документах работы к выполнению исполнителем. НЕ включать сюда сами документы ("предоставить ТЗ", "передать договор" — это не работы). Каждый отдельный вид работ — отдельной строкой. Включать все виды работ, не только геодезические.
+- contract_found: true если найден текст договора или проекта договора, иначе false
+- contract_has_subject: true если в договоре есть предмет договора (раздел/пункт с описанием что выполняется), false если договор найден но предмет не обнаружен, null если договор не найден
+- tz_found: true если найдено техническое задание, иначе false
+- tz_requirements[]: если tz_found=true — перечислить каждое требование ТЗ отдельной строкой (геодезические и сопутствующие). Если tz_found=false — пустой массив.
 Перед JSON — 3-5 строк цитат и выводов. JSON:
-{"object":"","object_source":"прямо/по заказчику/ориентировочно","dist_km":0,"terrType":"незастр_простой/незастр_сложный/застр_простой/застр_средний/застр_сложный/промзона_простой/промзона_сложный/дендро_парк/дендро_лес","area_ga":0,"length_km":0,"strip_m":50,"days":0,"contract_days":0,"dist_note":"","has_geo":true,"geo_assumed":false,"has_trassa":false,"has_wells":false,"has_razb":false,"has_exec":false,"has_loca":false,"has_bathy":false,"has_static":false,"has_geo_geo":false,"has_eco":false,"has_hydro":false,"has_survey_bld":false,"needs_expertise":false,"coord_system":"","scale":"","norms":[],"drill_count":0,"drill_depth_m":0,"special_conditions":[]}`
+{"object":"","object_source":"прямо/по заказчику/ориентировочно","dist_km":0,"terrType":"незастр_простой/незастр_сложный/застр_простой/застр_средний/застр_сложный/промзона_простой/промзона_сложный/дендро_парк/дендро_лес","area_ga":0,"length_km":0,"strip_m":50,"days":0,"contract_days":0,"dist_note":"","has_geo":true,"geo_assumed":false,"has_trassa":false,"has_wells":false,"has_razb":false,"has_exec":false,"has_loca":false,"has_bathy":false,"has_static":false,"has_geo_geo":false,"has_eco":false,"has_hydro":false,"has_survey_bld":false,"needs_expertise":false,"coord_system":"","scale":"","norms":[],"drill_count":0,"drill_depth_m":0,"special_conditions":[],"document_registry":{"documents":[],"required_works":[],"contract_found":false,"contract_has_subject":null,"tz_found":false,"tz_requirements":[]}}`
 
 
 // Load taxonomy async from GitHub or local file
@@ -953,23 +960,58 @@ var VERIFY_SYS=`Ты контролёр ГеоГис.
 Если geo_assumed=true — это нормально. missed=что есть в документе но не извлечено.
 JSON:{"confidence":"высокая/средняя/низкая","confidence_reason":"","errors":[],"missed":[],"corrections":{},"ok_fields":[],"summary":""}`;
 
-// CHECK_SYS v4.1 — 2026-03-24: ОКН, РЖД, min порог, камеральные
+// CHECK_SYS v4.2 — 2026-04-06: расширенная задача, нормы по всем типам, office_work_ok, синхронизация с калькулятором
 var CHECK_SYS=`Ты опытный геодезист-оценщик (15+ лет). Проверь расчёт как независимый эксперт.
-ЗАДАЧА: найти что ЗАБЫТО или ЗАНИЖЕНО. Не предлагай удешевление — ищи недооценку.
+ЗАДАЧА:
+* Все ли требования по выполнению работ, содержащиеся в требованиях входящих документов, учтены
+  (анализируй по доступному фрагменту документа; если фрагмент обрывается — укажи в issues)
+* все ли перечисленные работы требовались в материалах от заказчика
+* все ли перечисленные работы являются геодезическими работами
+* учтены ли риски и стоимости работ
+* соответствует ли перечень работ, расчет объемов, расчет стоимости — нормальным и рыночным для локации объекта
+ПРИНЦИП: если расчёт корректен — скажи прямо. Не ищи проблемы там, где их нет.
 
-ПРОВЕРЬ:
-1. МИНИМАЛЬНАЯ ЦЕНА: 1 выезд (любая площадь) — min 80-150 тыс.руб. (МО), 150-250 тыс. (регионы >200км). КП ниже = убыток.
-2. КАМЕРАЛЬНЫЕ: обработка данных + отчёт + чертежи = 30-50% от полевых. Учтены?
-3. ПОЛЕВЫЕ ДНИ: бригада 2 чел = max 1 объект в день. Застройка: 1 га/день. Незастроенная: 2 га/день.
-4. ОСОБЫЕ ОБЪЕКТЫ (если в рисках):
-   - ОКН: согласования КГИОП/Минкультуры = +30-100 тыс. + 2-4 недели. Не в расчёте!
-   - РЖД: разрешения + медосмотр + инструктаж + наряды-допуски = +50-150 тыс. Не в расчёте!
-   - Охранные/водоохранные зоны: согласования с балансодержателями.
-5. ТРАНСПОРТ: трансфер бригады туда-обратно учтён? При >100км — командировочные?
-6. Если КП подозрительно низкий для объекта — укажи явно.
+НДС = 22% (ФЗ №425-ФЗ от 28.11.2025). Все пороги ниже — БЕЗ НДС. Сравнивай с полем "КП без НДС".
+
+1. МИНИМАЛЬНАЯ ЦЕНА (без НДС, 1 выезд):
+   до 100 км от МКАД: мин. 40-120 тыс.₽
+   100-200 км: мин. 60-180 тыс.₽
+   более 200 км: мин. 120-250 тыс.₽
+   КП ниже минимума = убыток → min_price_ok=false.
+
+2. КАМЕРАЛЬНЫЕ РАБОТЫ:
+   Смотри "Статьи расчёта" в контексте. Если строки с камеральными нет —
+   при наличии в составе работ отчёта / чертежей / техплана →
+   это недооценка: +30-50% от стоимости полевых → office_work_ok=false.
+   Если камеральные отсутствуют и по составу работ не нужны → office_work_ok=true.
+
+3. ПОЛЕВЫЕ ДНИ (бригада 2 чел, 1 объект в день):
+   незастр_простой: 2.0 га/день | незастр_сложный: 1.0 га/день
+   застр_простой: 1.0 га/день | застр_средний: 1.0 га/день | застр_сложный: 0.73 га/день
+   промзона_простой: 0.75 га/день | промзона_сложный: 0.62 га/день
+   дендро_парк: 0.93 га/день | дендро_лес: 0.86 га/день
+   Если полевых дней < ceil(площадь / норма) → days_ok=false. Укажи сколько нужно.
+
+4. ТРАНСПОРТ:
+   ГСМ (туда-обратно) — всегда. Платные дороги — при >30 км.
+   Командировочные (выезд + суточные) — обязательны при >250 км.
+   Проживание — при >150 км и более 1 дня в поле.
+   Если чего-то нет в "Статьях расчёта" — transport_ok=false.
+
+5. ОСОБЫЕ ОБЪЕКТЫ (проверяй только если упомянуты в рисках или тексте):
+   ОКН: согласования КГИОП/Минкультуры = +30-100 тыс. + 2-4 нед.
+   РЖД: разрешения + медосмотр + наряды-допуски = +50-150 тыс.
+   Охранные/водоохранные зоны: уведомление + согласования балансодержателя = +20-60 тыс. + 2-3 нед.
+   Зоны ГТС, ЛЭП, газопровода: то же + технадзор.
+   Если есть и не в расчёте → special_approvals_needed=true, approvals_note=конкретный состав.
+
+6. УВЕРЕННОСТЬ:
+   высокая — все параметры заполнены, расчёт детальный, риски известны
+   средняя — есть неизвестные параметры (geo_assumed, площадь ориентировочна)
+   низкая — объект не определён, площадь=0, мало данных
 
 ТОЛЬКО JSON (без текста до/после):
-{"ok":true,"issues":[],"corrections":[],"expert_note":"2-3 конкретных предложения","confidence":"высокая/средняя/низкая","min_price_ok":true,"transport_ok":true,"days_ok":true,"special_approvals_needed":false,"approvals_note":""}`;
+{"ok":false,"issues":[],"corrections":[],"expert_note":"","confidence":"средняя","min_price_ok":true,"transport_ok":true,"days_ok":true,"office_work_ok":true,"special_approvals_needed":false,"approvals_note":""}`;
 
 async function runExpertCheck(){
   var btn=document.getElementById('expertCheckBtn');if(btn)btn.disabled=true;
@@ -978,14 +1020,28 @@ async function runExpertCheck(){
   var risks=(_ai&&_ai.risks&&_ai.risks.length)?'\nРиски: '+_ai.risks.join('; '):'';
   var col=(_ai&&_ai.colleagues_work&&_ai.colleagues_work.length)?'\nПередать коллегам: '+_ai.colleagues_work.join('; '):'';
   var geo=(_ai&&_ai.geo_assumed)?'\n⚠ Вид работ предположен (топосъёмка 1:500)':'';
-  var doc0=(_ai&&_ai._p0)?'\nДокумент: '+_ai._p0.substring(0,800):'';
+  var doc0=(_ai&&_ai._p0)?'\nДокумент (первые 1500 символов):\n'+_ai._p0.substring(0,1500):'';
+  var linesStr='';
+  if(_snap.lines&&_snap.lines.length){
+    linesStr='\nСтатьи расчёта:\n'+_snap.lines.map(function(l){return '  ['+l.g+'] '+l.l+': '+fmt(l.v)+'₽';}).join('\n');
+    if(_snap.notIn&&_snap.notIn.length) linesStr+='\nНе включено в расчёт: '+_snap.notIn.join('; ');
+  }
+  var worksStr='';
+  var _wf=[['p_trassa','Трассировка (га)'],['p_bathy','Батиметрия (га)'],['p_static','Статика (точек)'],['p_groN','Пунктов ГРО'],['p_pvo','Точек ПВО']];
+  _wf.forEach(function(pair){var el=document.getElementById(pair[0]);if(el&&parseFloat(el.value)>0)worksStr+='\n'+pair[1]+': '+el.value;});
+  var wellsEl2=document.getElementById('p_wells');
+  if(wellsEl2&&wellsEl2.value!=='0') worksStr+='\nВскрытие колодцев: '+((wellsEl2.options[wellsEl2.selectedIndex]||{}).text||wellsEl2.value);
+  var locaEl2=document.getElementById('p_loca');
+  if(locaEl2&&locaEl2.checked) worksStr+='\nЛокализация: да';
   var ctx='Объект: '+document.getElementById('p_object').value
-    +'\nТип: '+terrText+', Площадь: '+document.getElementById('p_area').value+' га'
+    +'\nТип территории: '+terrText
+    +', Площадь: '+document.getElementById('p_area').value+' га'
     +', Полевых дней: '+document.getElementById('p_days').value
-    +', Расстояние: '+document.getElementById('p_dist').value+' км'
-    +'\nКП без НДС: '+fmt(_snap.kp)+'₽, с НДС: '+fmt(_snap.kpNds)+'₽'
-    +', Маржа: '+_snap.margin+'%, Затраты: '+fmt(_snap.total)+'₽'
-    +risks+col+geo+doc0;
+    +', Расстояние от МКАД: '+document.getElementById('p_dist').value+' км'
+    +'\nКП без НДС: '+fmt(_snap.kp)+'₽, КП с НДС (22%): '+fmt(_snap.kpNds)+'₽'
+    +', Маржа: '+_snap.margin+'%, Себестоимость: '+fmt(_snap.total)+'₽'
+    +(worksStr?'\nСостав работ:'+worksStr:'')
+    +linesStr+risks+col+geo+doc0;
   try{
     var r=await apiCall(CHECK_SYS,ctx,2000);
     var lines=[];
@@ -994,6 +1050,7 @@ async function runExpertCheck(){
     if(!r.min_price_ok) lines.push('⚠ Цена ниже минимального порога для данного типа объекта.');
     if(!r.days_ok) lines.push('⚠ Количество полевых дней не соответствует объёму работ.');
     if(!r.transport_ok) lines.push('⚠ Транспортные расходы занижены или не учтены.');
+    if(!r.office_work_ok) lines.push('⚠ Камеральные не выделены в расчёте. При наличии отчёта/чертежей — добавить 30-50% от стоимости полевых.');
     if(r.issues&&r.issues.length) lines.push('Замечания:\n'+r.issues.map(function(x){return '• '+x;}).join('\n'));
     if(r.corrections&&r.corrections.length) lines.push('Рекомендации:\n'+r.corrections.map(function(x){return '→ '+x;}).join('\n'));
     addChatMsg('ai','🔍 Эксперт ('+(r.confidence||'—')+'):\n'+(lines.join('\n\n')||'Расчёт корректен, явных проблем не обнаружено.'));
@@ -1596,6 +1653,38 @@ function renderResult({lines,notIn,total,kp,kpNds,kpMin,kpMax,profit,margin,days
     vHtml='<div class="verdict '+cls+'"><div class="vbig">'+icon+'</div><div class="vd"><div class="vtitle">'+(ai.verdict||'').toUpperCase()+' '+ours+'</div><div class="vreason">'+(ai.verdict_reason||'')+'</div>'+(ai.dist_note?'<div class="vdnote">'+ai.dist_note+'</div>':'')+'</div></div>';
   }
 
+  // Document Registry block
+  var regHtml='';
+  var dr=ai.document_registry||{};
+  if(dr.documents&&dr.documents.length){
+    var docRows=(dr.documents||[]).map(function(d){
+      return '<tr><td style="padding:5px 8px;font-family:monospace;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">'+d.name+'</td><td style="padding:5px 8px;font-size:12px;font-weight:600;border-bottom:1px solid var(--border)">'+d.type+'</td></tr>';
+    }).join('');
+    var worksRows=(dr.required_works||[]).length
+      ? (dr.required_works.map(function(w){return '<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0"><div style="width:6px;height:6px;background:#3a6a9a;border-radius:50%;flex-shrink:0;margin-top:5px"></div><div style="font-size:12px">'+w+'</div></div>';}).join(''))
+      : '<div style="font-size:12px;color:var(--muted)">Явные работы не обнаружены</div>';
+    var contractStatus=dr.contract_found
+      ? '<span style="color:#1a7a3a;font-weight:600">✓ Найден</span>'+(dr.contract_has_subject===true?' · <span style="color:#1a7a3a">предмет договора есть</span>':dr.contract_has_subject===false?' · <span style="color:var(--warn)">⚠ предмет договора не обнаружен</span>':'')
+      : '<span style="color:var(--muted)">— Не найден</span>';
+    var tzStatus=dr.tz_found
+      ? '<span style="color:#1a7a3a;font-weight:600">✓ Найдено</span>'
+      : '<span style="color:var(--muted)">— Не найдено</span>';
+    var tzReqs=(dr.tz_found&&(dr.tz_requirements||[]).length)
+      ? '<div style="margin-top:6px">'+dr.tz_requirements.map(function(r){return '<div style="display:flex;gap:8px;align-items:flex-start;padding:2px 0"><div style="width:5px;height:5px;background:#6040a0;border-radius:50%;flex-shrink:0;margin-top:5px"></div><div style="font-size:12px">'+r+'</div></div>';}).join('')+'</div>'
+      : '';
+    regHtml='<div style="background:linear-gradient(135deg,#f8f6ff,#f0f4ff);border:1px solid #a090d0;border-radius:4px;margin-bottom:13px;overflow:hidden">'
+      +'<div style="padding:8px 14px;background:#ece8f8;border-bottom:1px solid #b8a8e0;font-family:monospace;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:#3a1a6a">📂 Реестр входящей информации</div>'
+      +'<div style="padding:12px 14px">'
+      +'<div style="margin-bottom:10px"><div style="font-family:monospace;font-size:10px;font-weight:700;text-transform:uppercase;color:#3a6a9a;margin-bottom:6px">Перечень документов</div>'
+      +'<table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:3px;overflow:hidden"><thead><tr><th style="padding:5px 8px;font-family:monospace;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left;background:var(--s2);border-bottom:1px solid var(--border)">Файл</th><th style="padding:5px 8px;font-family:monospace;font-size:10px;text-transform:uppercase;color:var(--muted);text-align:left;background:var(--s2);border-bottom:1px solid var(--border)">Содержание</th></tr></thead><tbody>'+docRows+'</tbody></table></div>'
+      +'<div style="margin-bottom:10px"><div style="font-family:monospace;font-size:10px;font-weight:700;text-transform:uppercase;color:#3a6a9a;margin-bottom:6px">Работы к выполнению</div>'+worksRows+'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+      +'<div style="padding:8px 10px;background:#fff;border:1px solid var(--border);border-radius:4px"><div style="font-family:monospace;font-size:10px;font-weight:700;text-transform:uppercase;color:#3a6a9a;margin-bottom:4px">Проект договора</div>'+contractStatus+'</div>'
+      +'<div style="padding:8px 10px;background:#fff;border:1px solid var(--border);border-radius:4px"><div style="font-family:monospace;font-size:10px;font-weight:700;text-transform:uppercase;color:#3a6a9a;margin-bottom:4px">Техническое задание</div>'+tzStatus+tzReqs+'</div>'
+      +'</div>'
+      +'</div></div>';
+  }
+
   // Understanding block
   var u=ai.understanding||{};
   var ubHtml='';
@@ -1722,7 +1811,7 @@ function renderResult({lines,notIn,total,kp,kpNds,kpMin,kpMax,profit,margin,days
   var addrH=addrV?'<div style="background:#fff;border:1px solid #e8e6e0;border-radius:8px;padding:12px 14px;margin-bottom:14px"><div style="font-size:10px;color:#aaa;font-family:monospace;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Объект</div><div style="font-size:14px;font-weight:500;margin-bottom:5px">'+addrV+'</div>'+(document.getElementById('p_dist').value?'<div style="font-size:11px;color:#888;margin-bottom:7px">'+document.getElementById('p_dist').value+' км от МКАД</div>':'')+'<div style="display:flex;gap:6px;flex-wrap:wrap"><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://yandex.ru/maps/?text='+encodeURIComponent(addrV)+'" target="_blank">Яндекс.Карты</a><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://maps.google.com/?q='+encodeURIComponent(addrV)+'" target="_blank">Google Maps</a><a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="https://2gis.ru/search/'+encodeURIComponent(addrV)+'" target="_blank">2ГИС</a>'+(window._kadNum?'<a style="font-size:11px;color:#16a349;background:#f0faf4;border:1px solid #b0d8b8;padding:3px 10px;border-radius:4px;font-family:monospace;text-decoration:none" href="'+window._kadUrl+'" target="_blank">📍 КПК '+window._kadNum+'</a>':'')+'</div>'+coordField+'</div>':'';
   var expertHtml=_snap.kp>0?'<div style="margin:10px 0"><button id="expertCheckBtn" onclick="runExpertCheck()" style="padding:8px 16px;border:1.5px solid var(--accent);border-radius:4px;background:transparent;font-family:monospace;font-size:12px;color:var(--accent);cursor:pointer">🔍 Экспертная проверка расчёта</button></div>':'';
 
-  ra.innerHTML=kpiH+addrH+vHtml+visualHtml+ubHtml+salesHtml+clHtml+winHtml+taskHtml+unmHtml+versionsHtml+costHtml+expertHtml+rHtml;
+  ra.innerHTML=kpiH+addrH+vHtml+regHtml+visualHtml+ubHtml+salesHtml+clHtml+winHtml+taskHtml+unmHtml+versionsHtml+costHtml+expertHtml+rHtml;
   if(notIn.length) runUnmatchedSearch(notIn);
 }
 
