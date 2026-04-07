@@ -1101,12 +1101,26 @@ async function apiCall(system,content,maxTok,_retry,model){
   if(data.usage&&window._lastUsage){window._lastUsage.input+=data.usage.input_tokens||0;window._lastUsage.output+=data.usage.output_tokens||0;window._lastUsage.calls++;window._lastUsage.cost_usd+=((data.usage.input_tokens||0)*3+(data.usage.output_tokens||0)*15)/1e7;}
   var rawT=(data.content?.[0]?.text||'');if(!rawT)return{};
   var raw=rawT.replace(/```json|```/g,'').trim();
-  var m=raw.match(/\{[\s\S]*\}/);
-  if(!m){if(!_retry)return apiCall('Отвечай ТОЛЬКО JSON. '+system,content,maxTok,true);throw new Error('Нет JSON');}
-  try{return JSON.parse(m[0]);}catch(e){
-    // Claude sometimes returns literal control chars inside string values — sanitize and retry
+  // Extract first balanced JSON object (greedy regex fails when Claude adds text with } after JSON)
+  var jsonStr=null;
+  var si=raw.indexOf('{');
+  if(si!==-1){
+    var depth=0,inS=false,esc=false;
+    for(var ci=si;ci<raw.length;ci++){
+      var ch=raw[ci];
+      if(esc){esc=false;continue;}
+      if(ch==='\\'&&inS){esc=true;continue;}
+      if(ch==='"'){inS=!inS;continue;}
+      if(inS)continue;
+      if(ch==='{')depth++;
+      if(ch==='}'){depth--;if(depth===0){jsonStr=raw.slice(si,ci+1);break;}}
+    }
+  }
+  if(!jsonStr){if(!_retry)return apiCall('Отвечай ТОЛЬКО JSON. '+system,content,maxTok,true);throw new Error('Нет JSON');}
+  try{return JSON.parse(jsonStr);}catch(e){
+    // Sanitize literal control chars inside string values and retry
     try{
-      var fixed=m[0].replace(/"[^"\\]*(?:\\[\s\S][^"\\]*)*"/g,function(s){
+      var fixed=jsonStr.replace(/"[^"\\]*(?:\\[\s\S][^"\\]*)*"/g,function(s){
         return s.replace(/\n/g,'\\n').replace(/\r/g,'\\r').replace(/\t/g,'\\t');
       });
       return JSON.parse(fixed);
@@ -1665,7 +1679,7 @@ function renderResult({lines,notIn,total,kp,kpNds,kpMin,kpMax,profit,margin,days
   var regHtml='';
   var dr=ai.document_registry||{};
   if(dr.documents&&dr.documents.length){
-    var docRows=(dr.documents||[]).map(function(d){
+    var docRows=dr.documents.map(function(d){
       return '<tr><td style="padding:5px 8px;font-family:monospace;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">'+d.name+'</td><td style="padding:5px 8px;font-size:12px;font-weight:600;border-bottom:1px solid var(--border)">'+d.type+'</td></tr>';
     }).join('');
     var worksRows=(dr.required_works||[]).length
