@@ -512,10 +512,20 @@ async function handleFiles(inp){
   _files=[];
   var errors=[];
 
-  // ── Bridge: отправляем на сервер если есть CAD/архивы/Excel ─────────────
+  // ── Bridge: отправляем если есть нечитаемые форматы или тяжёлые файлы ────
   var BRIDGE_EXTS=/\.(dwg|dxf|xls|xlsx|zip|rar|7z|doc)$/i;
-  if(!bundleFile && BRIDGE_URL && files.some(function(f){return BRIDGE_EXTS.test(f.name);})){
-    fst.innerHTML='<span style="color:var(--muted)">⏳ Отправляю файлы на сервер (bridge)...</span>';
+  var HEAVY_MB=2, HEAVY_TOTAL_MB=5;
+  var bridgeReasons=[];
+  files.forEach(function(f){
+    if(BRIDGE_EXTS.test(f.name)) bridgeReasons.push(f.name.split('.').pop().toLowerCase());
+    else if(f.size>HEAVY_MB*1024*1024) bridgeReasons.push(f.name+' ('+Math.round(f.size/1024/1024*10)/10+'MB)');
+  });
+  var totalMB=files.reduce(function(s,f){return s+f.size;},0)/1024/1024;
+  if(totalMB>HEAVY_TOTAL_MB) bridgeReasons.push('пакет '+Math.round(totalMB)+'MB');
+  var needsBridge=!bundleFile && BRIDGE_URL && bridgeReasons.length>0;
+  if(needsBridge){
+    var reasonStr=[...new Set(bridgeReasons)].join(', ');
+    fst.innerHTML='<span style="color:var(--muted)">⏳ Отправляю в конвертер нечитаемые/большие форматы: '+reasonStr+'...</span>';
     try{
       var form=new FormData();
       files.forEach(function(f){form.append('files',f,f.name);});
@@ -578,9 +588,9 @@ async function handleFiles(inp){
         var prevT=txtC.substring(0,3000)+(txtC.length>3000?'\n\n...[ещё '+(txtC.length-3000)+' симв.]':'');
         document.getElementById('tzText').value=(curT?curT+'\n\n':'')+('=== '+f.name+' ===\n')+prevT;
       } else if(f.name.toLowerCase().endsWith('.dwg')){
-        errors.push('dwg:'+f.name);
+        if(!BRIDGE_URL) errors.push('dwg:'+f.name);
       } else if(f.name.toLowerCase().endsWith('.dxf')){
-        errors.push('dxf:'+f.name);
+        if(!BRIDGE_URL) errors.push('dxf:'+f.name);
       } else if(f.name.toLowerCase().endsWith('.json')){
         fst.innerHTML='<span style="color:var(--muted)">⏳ JSON: '+f.name+'...</span>';
         var jsonTxt=await f.text();
@@ -638,6 +648,7 @@ async function handleFiles(inp){
   if(otherErrors.length>0) html+='<span style="color:var(--warn);display:block;margin-top:4px">⚠ '+otherErrors.join('; ')+'</span>';
   fst.innerHTML=html||'<span style="color:var(--warn)">Файлы не загружены</span>';
   inp.value='';
+  if(_files.length>0) parseTZ();
 }
 
 // МАСЛОБОЙКА — bridge_bundle.json → Claude pipeline
@@ -1106,6 +1117,27 @@ function buildAnalysisContent(prefix,rawText,pdfFiles,docxFiles,imgFiles){
 
 const MDL_SONNET='claude-sonnet-4-20250514';
 const MDL_HAIKU='claude-haiku-4-5-20251001';
+async function _apiRetry(doFetch){
+  var delays=[5000,10000,20000];
+  var data=await doFetch();
+  for(var attempt=0;attempt<delays.length;attempt++){
+    if(!data.error)return data;
+    var msg=(data.error.message||'').toLowerCase();
+    if(!msg.includes('rate')&&!msg.includes('overload')&&data.error.type!=='overloaded_error')return data;
+    var wait=delays[attempt];
+    var attemptNum=attempt+1;
+    var end=Date.now()+wait;
+    var tick=setInterval(function(){
+      var left=Math.ceil((end-Date.now())/1000);
+      if(left>0)showApiStatus('error','Перегрузка — повтор через '+left+'с ('+attemptNum+'/3)');
+    },1000);
+    await new Promise(function(r){setTimeout(r,wait);});
+    clearInterval(tick);
+    showApiStatus('ok');
+    data=await doFetch();
+  }
+  return data;
+}
 async function apiCall(system,content,maxTok,_retry,model){
   maxTok=maxTok||2000;
   model=model||MDL_SONNET;
@@ -1114,12 +1146,7 @@ async function apiCall(system,content,maxTok,_retry,model){
       body:JSON.stringify({model:model,max_tokens:maxTok,temperature:0,system:system,messages:[{role:'user',content:content}]})});
     return resp.json();
   };
-  var data=await doFetch();
-  if(data.error&&(data.error.message||'').toLowerCase().includes('rate')){
-    showApiStatus('error',data.error.message);
-    await new Promise(function(r){setTimeout(r,63000);});
-    showApiStatus('ok'); data=await doFetch();
-  }
+  var data=await _apiRetry(doFetch);
   if(data.error){showApiStatus('error',data.error.message);throw new Error(data.error.message);}
   showApiStatus('ok');
   if(data.usage&&window._lastUsage){window._lastUsage.input+=data.usage.input_tokens||0;window._lastUsage.output+=data.usage.output_tokens||0;window._lastUsage.calls++;window._lastUsage.cost_usd+=((data.usage.input_tokens||0)*3+(data.usage.output_tokens||0)*15)/1e7;}
@@ -1159,12 +1186,7 @@ async function apiCallText(system,content,maxTok,model){
       body:JSON.stringify({model:model,max_tokens:maxTok,temperature:0,system:system,messages:[{role:'user',content:content}]})});
     return resp.json();
   };
-  var data=await doFetch();
-  if(data.error&&(data.error.message||'').toLowerCase().includes('rate')){
-    showApiStatus('error',data.error.message);
-    await new Promise(function(r){setTimeout(r,63000);});
-    showApiStatus('ok'); data=await doFetch();
-  }
+  var data=await _apiRetry(doFetch);
   if(data.error){showApiStatus('error',data.error.message);throw new Error(data.error.message);}
   showApiStatus('ok');
   if(data.usage){window._tok=window._tok||{i:0,o:0,n:0};window._tok.i+=data.usage.input_tokens||0;window._tok.o+=data.usage.output_tokens||0;window._tok.n++;}
