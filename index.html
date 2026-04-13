@@ -235,7 +235,7 @@ table.ct tr.notcalc td{background:#fdf0e8;color:#8a3010;font-style:italic;font-s
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><div style="font-family:JetBrains Mono,monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#aaa;white-space:nowrap">Кадастр №</div><input id="kadNumber" style="flex:1;padding:6px 9px;border:1px solid #e0ddd8;border-radius:6px;background:#fafaf8;font-family:JetBrains Mono,monospace;font-size:12px;color:#111;outline:none" type="text" placeholder="не известно" oninput="onKadInput(this.value)"></div>
     <div class="lbl">ТЗ / Запрос КП</div>
     <textarea class="tz" id="tzText" placeholder="Вставьте текст ТЗ или загрузите файлы..."></textarea>
-    <label class="file-zone">📎 PDF, DOCX, TXT, RTF, PNG/JPG, JSON, CSV, HTML — можно несколько<input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.rtf,.odt,.png,.jpg,.jpeg,.json,.csv,.html,.htm" multiple onchange="handleFiles(this)"></label>
+    <label class="file-zone">📎 PDF, DOCX, TXT, RTF, PNG/JPG, JSON, CSV, HTML, DWG, DXF, XLS, ZIP — можно несколько<input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.rtf,.odt,.png,.jpg,.jpeg,.json,.csv,.html,.htm,.dwg,.dxf,.xls,.xlsx,.zip,.rar,.7z" multiple onchange="handleFiles(this)"></label>
     <div class="fst" id="fst"></div>
     <button class="parse-btn" id="parseBtn" onclick="parseTZ()">⚡ ИЗВЛЕЧЬ ПАРАМЕТРЫ</button>
     <button onclick="calcBtn_Stage()" style="margin-top:4px;width:100%;padding:7px;background:var(--accent);color:#fff;border:1.5px solid var(--accent);border-radius:4px;font-family:monospace;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer" id="calcBtn">↓ РАССЧИТАТЬ</button>
@@ -458,6 +458,7 @@ async function sendCorrectionToSupabase(param, aiValue, correctedValue) {
 }
 
 var PROXY='https://igdi-proxy.veklsandiego.workers.dev/';
+var BRIDGE_URL='http://91.235.137.75:8000/convert';
 
 // Ресайзеры убраны — страница прокручивается как одна
 
@@ -510,6 +511,29 @@ async function handleFiles(inp){
   fst.innerHTML='<span style="color:var(--muted)">⏳ Читаю файлы...</span>';
   _files=[];
   var errors=[];
+
+  // ── Bridge: отправляем на сервер если есть CAD/архивы/Excel ─────────────
+  var BRIDGE_EXTS=/\.(dwg|dxf|xls|xlsx|zip|rar|7z|doc)$/i;
+  if(!bundleFile && BRIDGE_URL && files.some(function(f){return BRIDGE_EXTS.test(f.name);})){
+    fst.innerHTML='<span style="color:var(--muted)">⏳ Отправляю файлы на сервер (bridge)...</span>';
+    try{
+      var form=new FormData();
+      files.forEach(function(f){form.append('files',f,f.name);});
+      var bresp=await fetch(BRIDGE_URL,{method:'POST',body:form});
+      if(!bresp.ok) throw new Error('HTTP '+bresp.status);
+      var bundle=await bresp.json();
+      if(bundle&&Array.isArray(bundle.files)&&bundle.summary){
+        var bs=bundle.summary;
+        fst.innerHTML='<span style="color:var(--ok);font-weight:600">✓ Bridge: '+bs.ok+' ok'+(bs.partial?' / '+bs.partial+' partial':'')+(bs.failed?' / '+bs.failed+' failed':'')+'</span>';
+        applyMasloboykaJSON(bundle);
+        inp.value='';
+        return;
+      }
+    }catch(bridgeErr){
+      fst.innerHTML='<span style="color:var(--warn)">⚠ Сервер недоступен: '+bridgeErr.message+'. Обрабатываю локально...</span>';
+    }
+  }
+  // ────────────────────────────────────────────────────────────────────────
   for(var f of files){
     try{
       if(f.name.toLowerCase().match(/\.(png|jpg|jpeg)$/)){
@@ -608,7 +632,7 @@ async function handleFiles(inp){
   }
   if(dxfFiles.length>0){
     html+='<div style="margin-top:6px;padding:8px 10px;background:#e4f0e7;border:1px solid #3a8a4a;border-radius:4px;font-size:12px">';
-    html+='<b style="color:var(--ok)">DXF файлы — обработаны bridge.py.</b> Загрузи вместо этого JSON bundle: <code style="background:#fff;padding:2px 4px;border-radius:2px;font-family:monospace;font-size:11px">bridge_bundle.json</code>';
+    html+='<b style="color:var(--warn)">DXF файлы — сервер bridge недоступен.</b> Конвертируй в PNG или загрузи после запуска сервера.';
     html+='<div style="color:var(--muted);margin-top:3px">Файлы: '+dxfFiles.map(e=>e.slice(4)).join(', ')+'</div></div>';
   }
   if(otherErrors.length>0) html+='<span style="color:var(--warn);display:block;margin-top:4px">⚠ '+otherErrors.join('; ')+'</span>';
